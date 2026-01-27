@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Strange Toolkit - VRChat World Creator Tools</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'vrc-blue': '#0093D5',
+                        'vrc-dark': '#1a1a2e',
+                        'vrc-darker': '#0f0f1a',
+                        'discord': '#5865F2',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-vrc-darker text-gray-100 min-h-screen">
+    <!-- Header -->
+    <header class="bg-vrc-dark border-b border-gray-800">
+        <div class="max-w-6xl mx-auto px-4 py-6">
+            <div class="flex items-center justify-between">
+                <h1 class="text-3xl font-bold bg-gradient-to-r from-vrc-blue to-purple-500 bg-clip-text text-transparent">
+                    Strange Toolkit
+                </h1>
+                <div class="flex gap-4">
+                    <a href="https://discord.gg/ZV5nK5vNFP" target="_blank" class="text-gray-400 hover:text-discord transition-colors">
+                        <i class="fab fa-discord text-2xl"></i>
+                    </a>
+                    <a href="https://github.com/bellastrangevr/StrangeToolkit" target="_blank" class="text-gray-400 hover:text-white transition-colors">
+                        <i class="fab fa-github text-2xl"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="py-16 px-4">
+        <div class="max-w-4xl mx-auto text-center">
+            <p class="text-xl text-gray-300 mb-8">
+                A Unity editor toolkit for VRChat world creators. Atmosphere presets, smart toggles with persistence, world auditing, and optimization tools.
+            </p>
+
+            <!-- Download Buttons -->
+            <div class="flex flex-col sm:flex-row gap-4 justify-center items-center mb-8">
+                <!-- VCC Add Button -->
+                <a href="vcc://vpm/addRepo?url=https://github.com/bellastrangevr/StrangeToolkit/releases/latest/download/vpm.json"
+                   class="inline-flex items-center gap-3 bg-vrc-blue hover:bg-blue-600 text-white font-semibold px-8 py-4 rounded-lg transition-all hover:scale-105 shadow-lg shadow-vrc-blue/25">
+                    <svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                    </svg>
+                    Add to VCC
+                </a>
+
+                <!-- UnityPackage Download -->
+                <a href="https://github.com/bellastrangevr/StrangeToolkit/releases/latest/download/StrangeToolkit.unitypackage"
+                   class="inline-flex items-center gap-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold px-8 py-4 rounded-lg transition-all hover:scale-105">
+                    <i class="fas fa-download"></i>
+                    Download .unitypackage
+                </a>
+            </div>
+
+            <p class="text-sm text-gray-500">
+                Requires VRChat Worlds SDK 3.9.0 or higher
+            </p>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="py-16 px-4 bg-vrc-dark">
+        <div class="max-w-6xl mx-auto">
+            <h2 class="text-2xl font-bold text-center mb-12">Features</h2>
+
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Strange Hub -->
+                <div class="bg-vrc-darker rounded-xl p-6 border border-gray-800 hover:border-vrc-blue/50 transition-colors">
+                    <div class="w-12 h-12 bg-vrc-blue/20 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-cube text-vrc-blue text-xl"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold mb-2">Strange Hub</h3>
+                    <p class="text-gray-400 text-sm">Central manager for atmosphere presets, toggle persistence, and object cleanup tracking.</p>
+                </div>
+
+                <!-- Smart Toggles -->
+                <div class="bg-vrc-darker rounded-xl p-6 border border-gray-800 hover:border-vrc-blue/50 transition-colors">
+                    <div class="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-toggle-on text-purple-500 text-xl"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold mb-2">Smart Toggles</h3>
+                    <p class="text-gray-400 text-sm">Interactive toggles with GameObject control, animator parameters, material emission, and audio feedback.</p>
+                </div>
+
+                <!-- Atmosphere Presets -->
+                <div class="bg-vrc-darker rounded-xl p-6 border border-gray-800 hover:border-vrc-blue/50 transition-colors">
+                    <div class="w-12 h-12 bg-orange-500/20 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-sun text-orange-500 text-xl"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold mb-2">Atmosphere Presets</h3>
+                    <p class="text-gray-400 text-sm">Define multiple skybox, fog, and lighting configurations. Switch between them at runtime.</p>
+                </div>
+
+                <!-- Editor Dashboard -->
+                <div class="bg-vrc-darker rounded-xl p-6 border border-gray-800 hover:border-vrc-blue/50 transition-colors">
+                    <div class="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-columns text-green-500 text-xl"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold mb-2">Editor Dashboard</h3>
+                    <p class="text-gray-400 text-sm">World management, visual tools, interactables setup, and performance auditing in one place.</p>
+                </div>
+
+                <!-- World Auditor -->
+                <div class="bg-vrc-darker rounded-xl p-6 border border-gray-800 hover:border-vrc-blue/50 transition-colors">
+                    <div class="w-12 h-12 bg-red-500/20 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-search text-red-500 text-xl"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold mb-2">World Auditor</h3>
+                    <p class="text-gray-400 text-sm">Performance scanning, occlusion culling checks, and asset weight analysis for optimization.</p>
+                </div>
+
+                <!-- Expansions -->
+                <div class="bg-vrc-darker rounded-xl p-6 border border-gray-800 hover:border-vrc-blue/50 transition-colors">
+                    <div class="w-12 h-12 bg-pink-500/20 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-puzzle-piece text-pink-500 text-xl"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold mb-2">Expansions (Beta)</h3>
+                    <p class="text-gray-400 text-sm">DJ Mode for stage lighting control and Game Mode for RPG-style vitals and loot systems.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Installation Section -->
+    <section class="py-16 px-4">
+        <div class="max-w-3xl mx-auto">
+            <h2 class="text-2xl font-bold text-center mb-8">Installation</h2>
+
+            <div class="space-y-6">
+                <div class="bg-vrc-dark rounded-xl p-6 border border-gray-800">
+                    <h3 class="font-semibold mb-3 flex items-center gap-2">
+                        <span class="w-6 h-6 bg-vrc-blue rounded-full flex items-center justify-center text-sm">1</span>
+                        Via VRChat Creator Companion (Recommended)
+                    </h3>
+                    <p class="text-gray-400 text-sm mb-4">Click the "Add to VCC" button above, or manually add the repository URL:</p>
+                    <code class="block bg-vrc-darker px-4 py-2 rounded text-sm text-vrc-blue break-all">
+                        https://github.com/bellastrangevr/StrangeToolkit/releases/latest/download/vpm.json
+                    </code>
+                </div>
+
+                <div class="bg-vrc-dark rounded-xl p-6 border border-gray-800">
+                    <h3 class="font-semibold mb-3 flex items-center gap-2">
+                        <span class="w-6 h-6 bg-gray-600 rounded-full flex items-center justify-center text-sm">2</span>
+                        Via UnityPackage
+                    </h3>
+                    <p class="text-gray-400 text-sm">Download the .unitypackage from releases and import it into your Unity project.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="py-8 px-4 border-t border-gray-800">
+        <div class="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+            <p class="text-gray-500 text-sm">
+                MIT License &copy; bellastrangevr
+            </p>
+            <div class="flex gap-6">
+                <a href="https://discord.gg/ZV5nK5vNFP" target="_blank" class="text-gray-500 hover:text-discord text-sm transition-colors">
+                    Discord
+                </a>
+                <a href="https://vrchat.com/home/group/grp_c2d5a5a6-2bf7-4eac-b92a-dd1f2363006b" target="_blank" class="text-gray-500 hover:text-green-500 text-sm transition-colors">
+                    VRChat Group
+                </a>
+                <a href="https://github.com/bellastrangevr/StrangeToolkit" target="_blank" class="text-gray-500 hover:text-white text-sm transition-colors">
+                    GitHub
+                </a>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
