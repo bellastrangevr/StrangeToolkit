@@ -2,4 +2,5 @@ RELEASE_INSTRUCTIONS.md
 
 # Expansion packs (user content)
 Expansions/*
-!Expansions/.gitkeep
+!Expansions/StrangeToolkit.Expansions.asmdef
+!Expansions/StrangeToolkit.Expansions.asmdef.meta

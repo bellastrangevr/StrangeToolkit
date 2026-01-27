@@ -1,0 +1,19 @@
+{
+    "name": "StrangeToolkit.Expansions",
+    "rootNamespace": "StrangeToolkit",
+    "references": [
+        "StrangeToolkit",
+        "UdonSharp.Runtime",
+        "VRC.Udon",
+        "VRC.SDK3"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
