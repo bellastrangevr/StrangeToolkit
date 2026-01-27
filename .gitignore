@@ -1,7 +1,5 @@
 RELEASE_INSTRUCTIONS.md
 
-# Expansion packs (Examples)
-Expansions/DJ/
-Expansions/DJ.meta
-Expansions/Game/
-Expansions/Game.meta
+# Expansion packs (user content)
+Expansions/*
+!Expansions/.gitkeep
