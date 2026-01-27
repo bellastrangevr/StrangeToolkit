@@ -3,6 +3,8 @@
 [![GitHub release](https://img.shields.io/github/v/release/bellastrangevr/StrangeToolkit?style=flat-square)](https://github.com/bellastrangevr/StrangeToolkit/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
 [![VPM Package](https://img.shields.io/badge/VPM-Package-blue?style=flat-square)](https://github.com/bellastrangevr/StrangeToolkit/releases/latest/download/vpm.json)
+[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?style=flat-square&logo=discord&logoColor=white)](https://discord.gg/ZV5nK5vNFP)
+[![VRChat Group](https://img.shields.io/badge/VRChat-Group-1DB954?style=flat-square&logo=vrchat&logoColor=white)](https://vrchat.com/home/group/grp_c2d5a5a6-2bf7-4eac-b92a-dd1f2363006b)
 
 A Unity editor toolkit for VRChat world creators. Provides atmosphere presets, smart toggles with persistence, world auditing, and optimization tools.
 
