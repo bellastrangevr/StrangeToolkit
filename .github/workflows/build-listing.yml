@@ -63,7 +63,7 @@ jobs:
             const vpmListing = {
               name: "Strange Toolkit VPM Repository",
               id: "${{ env.packageName }}",
-              url: `https://github.com/${context.repo.owner}/${context.repo.repo}/releases/latest/download/vpm.json`,
+              url: `https://${context.repo.owner}.github.io/${context.repo.repo}/vpm.json`,
               author: "bellastrangevr",
               packages: {
                 "${{ env.packageName }}": {
@@ -72,13 +72,13 @@ jobs:
               }
             };
 
-            // Write to file
-            fs.writeFileSync('vpm.json', JSON.stringify(vpmListing, null, 2));
+            // Write to docs folder for GitHub Pages
+            fs.writeFileSync('docs/vpm.json', JSON.stringify(vpmListing, null, 2));
 
       - name: Commit and Push Listing
         run: |
           git config user.name "${{ github.actor }}"
           git config user.email "${{ github.actor }}@users.noreply.github.com"
-          git add -f vpm.json
+          git add -f docs/vpm.json
           git diff --quiet && git diff --staged --quiet || git commit -m "Update VPM listing"
           git push

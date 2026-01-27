@@ -61,7 +61,8 @@ public class StrangeToggle : UdonSharpBehaviour
         // 2. Play Sound
         if (soundSource != null)
         {
-            soundSource.PlayOneShot(_isOn ? onSound : offSound);
+            AudioClip clip = _isOn ? onSound : offSound;
+            if (clip != null) soundSource.PlayOneShot(clip);
         }
 
         // 3. Save State (Local Persistence)
@@ -74,25 +75,34 @@ public class StrangeToggle : UdonSharpBehaviour
     public void UpdateVisuals()
     {
         // Toggle GameObjects (Mirrors/Blockers)
-        foreach (GameObject obj in toggleObjects)
+        if (toggleObjects != null)
         {
-            if (obj != null) obj.SetActive(_isOn);
+            foreach (GameObject obj in toggleObjects)
+            {
+                if (obj != null) obj.SetActive(_isOn);
+            }
         }
 
         // Toggle Animators
-        foreach (Animator anim in animators)
+        if (animators != null)
         {
-            if (anim != null) anim.SetBool(animatorBoolParam, _isOn);
+            foreach (Animator anim in animators)
+            {
+                if (anim != null) anim.SetBool(animatorBoolParam, _isOn);
+            }
         }
 
         // Toggle Emission (GPU Optimized via MPB)
-        foreach (Renderer rend in emissionRenderers)
+        if (emissionRenderers != null)
         {
-            if (rend == null) continue;
+            foreach (Renderer rend in emissionRenderers)
+            {
+                if (rend == null) continue;
 
-            rend.GetPropertyBlock(_mpb);
-            _mpb.SetColor("_EmissionColor", _isOn ? emissionOnColor : emissionOffColor);
-            rend.SetPropertyBlock(_mpb);
+                rend.GetPropertyBlock(_mpb);
+                _mpb.SetColor("_EmissionColor", _isOn ? emissionOnColor : emissionOffColor);
+                rend.SetPropertyBlock(_mpb);
+            }
         }
     }
 
@@ -124,8 +134,11 @@ public class StrangeToggle : UdonSharpBehaviour
         Gizmos.DrawIcon(transform.position, "d_Toggle Icon", true);
         
         // Draw lines to targets
-        foreach(GameObject obj in toggleObjects) {
-            if(obj != null) Gizmos.DrawLine(transform.position, obj.transform.position);
+        if (toggleObjects != null)
+        {
+            foreach(GameObject obj in toggleObjects) {
+                if(obj != null) Gizmos.DrawLine(transform.position, obj.transform.position);
+            }
         }
     }
 #endif

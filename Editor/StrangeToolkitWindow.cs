@@ -16,7 +16,6 @@ namespace StrangeToolkit
         public bool includeChildren = true;
     }
 
-    // --- SNAPSHOT CLASS FOR RESTORE SYSTEM ---
     public class VisualsSnapshot
     {
         public Material skybox;
@@ -29,17 +28,22 @@ namespace StrangeToolkit
         public Dictionary<GameObject, bool> rootStates = new Dictionary<GameObject, bool>();
     }
 
-    // --- SMART ENTRY FOR NON-STATIC OBJECTS ---
     public class NonStaticEntry
     {
         public GameObject obj;
-        public string reason; // Why it implies movement (e.g., "Animator")
+        public string reason;
         public bool IsSafeToStatic => string.IsNullOrEmpty(reason);
+    }
+
+    public class BrokenStaticEntry
+    {
+        public GameObject obj;
+        public string reason;
     }
 
     public class StrangeToolkitWindow : EditorWindow
     {
-        private enum ToolkitTab { World, Visuals, Interactables, Auditor }
+        private enum ToolkitTab { World, Visuals, Interactables, Auditor, Expansions }
         private ToolkitTab _currentTab = ToolkitTab.World;
 
         private enum InspectorMode { Meshes, Textures, AudioMisc }
@@ -52,29 +56,29 @@ namespace StrangeToolkit
         private bool _scanComplete = false;
         private Type _tVRC_LPPV, _tRedSim_LPPV, _tBakery;
 
-        // Cached hub reference
         private StrangeHub _cachedHub;
         private double _lastHubCheckTime;
         private const double HUB_CACHE_DURATION = 1.0;
 
-        // AUDITOR DATA
+        // Auditor data
         private List<Light> _realtimeLights = new List<Light>();
-        
-        // Changed to use the smart entry class
         private List<NonStaticEntry> _nonStaticObjects = new List<NonStaticEntry>();
-        
+        private List<BrokenStaticEntry> _brokenStaticObjects = new List<BrokenStaticEntry>();
+
         private bool _auditorHasRun = false, _auditorClean = false;
         private int _occlusionSize = 0;
         private Vector2 _realtimeLightsScrollPos;
         private Vector2 _nonStaticObjectsScrollPos;
+        private Vector2 _brokenStaticScrollPos;
 
-        // VISUALS SNAPSHOT DATA
         private VisualsSnapshot _lastSnapshot = null;
 
-        // HEAVY ASSET DATA
-        private class HeavyMesh { public GameObject obj; public long triCount; public long memSize; public long diskSize; }
-        private class HeavyTexture { public Texture tex; public long memSize; public long diskSize; }
-        private class HeavyAsset { public UnityEngine.Object obj; public long memSize; public long diskSize; }
+        // Asset weight data
+        private class HeavyMesh { public GameObject obj; public long triCount; public long memSize; }
+        private class HeavyTexture { public Texture tex; public long memSize; public long vramSize; public bool isCompressed; public string compressionFormat; public int width; public int height; public string assetPath; }
+        private static readonly int[] _textureSizeOptionsBase = { 128, 256, 512, 1024, 2048, 4096, 8192 };
+        private static readonly TextureImporterFormat[] _compressionOptions = { TextureImporterFormat.Automatic, TextureImporterFormat.BC7, TextureImporterFormat.DXT1, TextureImporterFormat.DXT5, TextureImporterFormat.ASTC_6x6 };
+        private class HeavyAsset { public UnityEngine.Object obj; public long memSize; }
 
         private class SceneRegistry
         {
@@ -86,10 +90,10 @@ namespace StrangeToolkit
         private List<HeavyTexture> _heaviestTextures = new List<HeavyTexture>();
         private SceneRegistry _registry = new SceneRegistry();
         private bool _weightScanRun = false;
+        private bool _usingBuildData = false;
+        private string _buildDataSize = "";
 
-        // --- METRICS ---
         private long _totalVRAMBytes = 0;
-        private long _totalDiskBytes = 0;
 
         private Vector2 _mainScrollPos, _auditorScrollPos, _blacklistScrollPos;
         private string[] _sortedShaderNames;
@@ -100,20 +104,37 @@ namespace StrangeToolkit
         [SerializeField] private List<BlacklistEntry> _blacklistObjects = new List<BlacklistEntry>();
         [SerializeField] private List<Material> _blacklistMaterials = new List<Material>();
 
+        private class ExpansionInfo
+        {
+            public ExpansionConfig config;
+            public string folderName;
+        }
+        private List<ExpansionInfo> _expansions = new List<ExpansionInfo>();
+        private Vector2 _expansionsScrollPos;
+
         [MenuItem("Strange Toolkit/Open Dashboard")]
         public static void ShowWindow() => GetWindow<StrangeToolkitWindow>("Strange Hub");
 
         private void OnEnable()
         {
             SimpleScan();
+            ScanForExpansions();
             EditorSceneManager.sceneOpened += OnSceneOpened;
             EditorSceneManager.sceneClosed += OnSceneClosed;
+            EditorApplication.projectChanged += OnProjectChanged;
         }
 
         private void OnDisable()
         {
             EditorSceneManager.sceneOpened -= OnSceneOpened;
             EditorSceneManager.sceneClosed -= OnSceneClosed;
+            EditorApplication.projectChanged -= OnProjectChanged;
+        }
+
+        private void OnProjectChanged()
+        {
+            ScanForExpansions();
+            Repaint();
         }
 
         private void OnSceneOpened(UnityEngine.SceneManagement.Scene scene, OpenSceneMode mode)
@@ -159,6 +180,7 @@ namespace StrangeToolkit
                 case ToolkitTab.Visuals: DrawVisualsTab(); break;
                 case ToolkitTab.Interactables: DrawInteractablesTab(); break;
                 case ToolkitTab.Auditor: DrawAuditorTab(); break;
+                case ToolkitTab.Expansions: DrawExpansionsTab(); break;
             }
 
             GUILayout.EndArea();
@@ -177,6 +199,9 @@ namespace StrangeToolkit
             DrawTabButton("Interactables", ToolkitTab.Interactables);
             DrawTabButton("Auditor", ToolkitTab.Auditor);
 
+            GUILayout.Space(20);
+            DrawTabButton("Expansions", ToolkitTab.Expansions);
+
             GUILayout.FlexibleSpace();
             if (GUILayout.Button("Refresh System")) RefreshSystem();
             GUILayout.Space(10);
@@ -193,9 +218,7 @@ namespace StrangeToolkit
             GUI.backgroundColor = original;
         }
 
-        // =========================================================
-        // 1. WORLD TAB
-        // =========================================================
+        // --- World Tab ---
         private void DrawWorldTab()
         {
             GUILayout.Label("World Settings", _headerStyle);
@@ -350,9 +373,6 @@ namespace StrangeToolkit
             EditorGUILayout.EndScrollView();
         }
 
-        // =========================================================
-        // SNAPSHOT LOGIC
-        // =========================================================
         private void CaptureVisuals(StrangeHub hub)
         {
             _lastSnapshot = new VisualsSnapshot();
@@ -397,9 +417,7 @@ namespace StrangeToolkit
             Debug.Log("[StrangeToolkit] Scene Visuals Restored.");
         }
 
-        // =========================================================
-        // 2. AUDITOR TAB (UPDATED WITH TOGGLE SWITCHES)
-        // =========================================================
+        // --- Auditor Tab ---
         private void DrawAuditorTab()
         {
             GUILayout.Label("World Auditor", _headerStyle);
@@ -407,7 +425,6 @@ namespace StrangeToolkit
 
             _mainScrollPos = EditorGUILayout.BeginScrollView(_mainScrollPos);
 
-            // 1. PERFORMANCE SCAN
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             GUILayout.Space(5);
             GUILayout.Label("Performance Scan", _subHeaderStyle);
@@ -432,7 +449,6 @@ namespace StrangeToolkit
                 }
                 GUILayout.Space(10);
 
-                // --- SMART FILTERING COUNTS ---
                 int safeToStaticCount = _nonStaticObjects.Count(x => x.IsSafeToStatic);
                 int ignoredCount = _nonStaticObjects.Count - safeToStaticCount;
                 
@@ -463,7 +479,6 @@ namespace StrangeToolkit
                     GUILayout.Space(10);
                 }
 
-                // Non-Static Objects (UPDATED TOGGLE UI)
                 if (_nonStaticObjects.Count > 0)
                 {
                     string staticTooltip = "Objects that never move should be Static.\n\nMoving Objects (Pickups/Animators) are flagged below.";
@@ -479,7 +494,6 @@ namespace StrangeToolkit
 
                         EditorGUILayout.BeginHorizontal(_listItemStyle);
                         
-                        // NAME & REASON
                         if (entry.IsSafeToStatic)
                         {
                             GUILayout.Label(entry.obj.name, GUILayout.Width(180));
@@ -494,12 +508,11 @@ namespace StrangeToolkit
 
                         GUILayout.FlexibleSpace();
 
-                        // THE TOGGLE SWITCH
                         if (entry.IsSafeToStatic)
                         {
                             bool isStatic = entry.obj.isStatic;
                             string btnText = isStatic ? "STATIC" : "DYNAMIC";
-                            Color btnColor = isStatic ? Color.green : new Color(1f, 0.4f, 0.4f); // Green vs Soft Red
+                            Color btnColor = isStatic ? Color.green : new Color(1f, 0.4f, 0.4f);
                             
                             GUI.backgroundColor = btnColor;
                             if (GUILayout.Button(btnText, GUILayout.Width(80)))
@@ -512,7 +525,6 @@ namespace StrangeToolkit
                         }
                         else
                         {
-                            // Locked for Unsafe objects
                             GUI.enabled = false;
                             GUILayout.Button("LOCKED", GUILayout.Width(80));
                             GUI.enabled = true;
@@ -525,20 +537,68 @@ namespace StrangeToolkit
 
                     GUILayout.Space(5);
                     GUILayout.BeginHorizontal();
-                    
-                    if (GUILayout.Button("Select Safe Candidates")) 
-                    { 
-                        Selection.objects = _nonStaticObjects.Where(x => x.IsSafeToStatic).Select(x => x.obj).ToArray(); 
+
+                    if (GUILayout.Button("Select Safe Candidates"))
+                    {
+                        Selection.objects = _nonStaticObjects.Where(x => x.IsSafeToStatic).Select(x => x.obj).ToArray();
                     }
-                    
-                    // Only enable button if there are actually things to fix
+
                     GUI.enabled = safeToStaticCount > 0;
                     if (GUILayout.Button($"Set All Safe to Static")) FixStatic();
                     GUI.enabled = true;
-                    
+
                     GUILayout.EndHorizontal();
                 }
-                else if (_auditorClean && _occlusionSize > 0)
+
+                // Broken static objects (static but shouldn't be)
+                if (_brokenStaticObjects.Count > 0)
+                {
+                    GUILayout.Space(10);
+                    string brokenTooltip = "These objects are set to Static but have components that require movement (Rigidbody, Pickup, etc.).\n\nThis will cause broken behavior in-game!";
+                    DrawTooltipHelpBox($"{_brokenStaticObjects.Count} BROKEN Static Objects!", brokenTooltip, MessageType.Error);
+
+                    _brokenStaticScrollPos = EditorGUILayout.BeginScrollView(_brokenStaticScrollPos, GUILayout.Height(150));
+
+                    foreach (var entry in _brokenStaticObjects)
+                    {
+                        if (entry.obj == null) continue;
+
+                        EditorGUILayout.BeginHorizontal(_listItemStyle);
+
+                        GUILayout.Label(entry.obj.name, EditorStyles.boldLabel, GUILayout.Width(180));
+                        GUILayout.Label($"[{entry.reason}]", EditorStyles.miniLabel, GUILayout.Width(150));
+
+                        GUILayout.FlexibleSpace();
+
+                        GUI.backgroundColor = new Color(1f, 0.6f, 0.3f);
+                        if (GUILayout.Button("Fix", GUILayout.Width(50)))
+                        {
+                            Undo.RecordObject(entry.obj, "Fix Broken Static");
+                            entry.obj.isStatic = false;
+                            EditorUtility.SetDirty(entry.obj);
+                            RunAuditorScan();
+                            GUIUtility.ExitGUI();
+                        }
+                        GUI.backgroundColor = Color.white;
+
+                        if (GUILayout.Button("Sel", GUILayout.Width(40))) Selection.activeGameObject = entry.obj;
+                        EditorGUILayout.EndHorizontal();
+                    }
+                    EditorGUILayout.EndScrollView();
+
+                    GUILayout.Space(5);
+                    GUILayout.BeginHorizontal();
+                    if (GUILayout.Button("Select All Broken"))
+                    {
+                        Selection.objects = _brokenStaticObjects.Select(x => x.obj).Cast<UnityEngine.Object>().ToArray();
+                    }
+                    GUI.backgroundColor = new Color(1f, 0.6f, 0.3f);
+                    if (GUILayout.Button("Fix All (Set to Dynamic)")) FixBrokenStatic();
+                    GUI.backgroundColor = Color.white;
+                    GUILayout.EndHorizontal();
+                }
+
+                if (_auditorClean && _occlusionSize > 0 && _nonStaticObjects.Count == 0 && _brokenStaticObjects.Count == 0)
                 {
                     GUILayout.Label("All Systems Optimized.", _successStyle);
                 }
@@ -547,7 +607,6 @@ namespace StrangeToolkit
 
             GUILayout.Space(15);
 
-            // 2. WEIGHT INSPECTOR
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             GUILayout.Space(5);
             GUILayout.Label("Scene Weight Inspector", _subHeaderStyle);
@@ -563,6 +622,27 @@ namespace StrangeToolkit
 
             if (_weightScanRun)
             {
+                EditorGUILayout.BeginHorizontal();
+                if (_usingBuildData)
+                {
+                    GUI.color = new Color(0.5f, 1f, 0.5f);
+                    GUILayout.Label("📊 Using Build Log Data", EditorStyles.miniLabel);
+                    if (!string.IsNullOrEmpty(_buildDataSize))
+                        GUILayout.Label($"(Compressed: {_buildDataSize})", EditorStyles.miniLabel);
+                    GUI.color = Color.white;
+                }
+                else
+                {
+                    GUI.color = new Color(1f, 0.8f, 0.5f);
+                    GUILayout.Label("📐 Using Estimation (Build world for accurate data)", EditorStyles.miniLabel);
+                    GUI.color = Color.white;
+                }
+                GUILayout.FlexibleSpace();
+                EditorGUILayout.EndHorizontal();
+            }
+
+            if (_weightScanRun)
+            {
                 _auditorScrollPos = EditorGUILayout.BeginScrollView(_auditorScrollPos, GUILayout.Height(250));
                 if (_inspectorMode == InspectorMode.Meshes) DrawMeshInspector();
                 else if (_inspectorMode == InspectorMode.Textures) DrawTextureInspector();
@@ -573,7 +653,6 @@ namespace StrangeToolkit
 
             GUILayout.Space(15);
 
-            // 3. QUEST OPTIMIZATION
             if (_weightScanRun)
             {
                 DrawQuestEstimator();
@@ -582,9 +661,7 @@ namespace StrangeToolkit
             EditorGUILayout.EndScrollView();
         }
 
-        // =========================================================
-        // 3. VISUALS TAB
-        // =========================================================
+        // --- Visuals Tab ---
         private void DrawVisualsTab()
         {
             GUILayout.Label("Visuals & Graphics", _headerStyle);
@@ -706,9 +783,7 @@ namespace StrangeToolkit
             EditorGUILayout.EndScrollView();
         }
 
-        // =========================================================
-        // 4. INTERACTABLES TAB
-        // =========================================================
+        // --- Interactables Tab ---
         private void DrawInteractablesTab()
         {
             GUILayout.Label("Interactables & Logic", _headerStyle);
@@ -738,9 +813,172 @@ namespace StrangeToolkit
             EditorGUILayout.EndVertical();
         }
 
-        // =========================================================
-        // HELPERS
-        // =========================================================
+        // --- Expansions Tab ---
+        private void DrawExpansionsTab()
+        {
+            GUILayout.Label("Expansions", _headerStyle);
+            GUILayout.Space(10);
+
+            _expansionsScrollPos = EditorGUILayout.BeginScrollView(_expansionsScrollPos);
+
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            GUILayout.Space(5);
+            GUILayout.Label("Installed Expansions", _subHeaderStyle);
+            GUILayout.Space(5);
+
+            if (_expansions.Count == 0)
+            {
+                EditorGUILayout.HelpBox("No expansions installed.", MessageType.Info);
+            }
+            else
+            {
+                foreach (var expansion in _expansions)
+                {
+                    DrawExpansionEntry(expansion);
+                    GUILayout.Space(5);
+                }
+            }
+
+            EditorGUILayout.EndVertical();
+            EditorGUILayout.EndScrollView();
+        }
+
+        private void DrawExpansionCard(ExpansionInfo expansion)
+        {
+            if (expansion.config == null) return;
+
+            EditorGUILayout.BeginVertical(_cardStyle);
+
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label(expansion.config.displayName, _subHeaderStyle);
+            GUILayout.FlexibleSpace();
+            GUILayout.Label($"v{expansion.config.version}", EditorStyles.miniLabel);
+            EditorGUILayout.EndHorizontal();
+
+            if (!string.IsNullOrEmpty(expansion.config.description))
+            {
+                GUILayout.Label(expansion.config.description, EditorStyles.wordWrappedMiniLabel);
+            }
+
+            GUILayout.Space(5);
+
+            string unityPath = GetExpansionsUnityPath() + "/" + expansion.folderName;
+            string[] scriptGuids = AssetDatabase.FindAssets("t:MonoScript", new[] { unityPath });
+            foreach (string guid in scriptGuids)
+            {
+                string scriptPath = AssetDatabase.GUIDToAssetPath(guid);
+                string scriptName = Path.GetFileNameWithoutExtension(scriptPath);
+
+                if (scriptName == "Config" || scriptName == "ExpansionConfig") continue;
+
+                MonoScript script = AssetDatabase.LoadAssetAtPath<MonoScript>(scriptPath);
+                if (script == null) continue;
+
+                System.Type scriptType = script.GetClass();
+                if (scriptType == null) continue;
+
+                if (!typeof(UdonSharp.UdonSharpBehaviour).IsAssignableFrom(scriptType)) continue;
+
+                if (GUILayout.Button($"Add {scriptName}", GUILayout.Height(25)))
+                {
+                    GameObject newObj = new GameObject(scriptName);
+                    Undo.RegisterCreatedObjectUndo(newObj, $"Create {scriptName}");
+                    newObj.AddComponent(scriptType);
+                    Selection.activeGameObject = newObj;
+                }
+            }
+
+            EditorGUILayout.EndVertical();
+        }
+
+        private void DrawMissingConfigCard(ExpansionInfo expansion)
+        {
+            EditorGUILayout.BeginVertical(_cardStyle);
+            EditorGUILayout.HelpBox($"Missing Config.asset in '{expansion.folderName}' folder.", MessageType.Warning);
+            EditorGUILayout.EndVertical();
+        }
+
+        private void DrawExpansionEntry(ExpansionInfo expansion)
+        {
+            if (expansion.config == null)
+            {
+                DrawMissingConfigCard(expansion);
+            }
+            else
+            {
+                DrawExpansionCard(expansion);
+            }
+        }
+
+        private void ScanForExpansions()
+        {
+            _expansions.Clear();
+
+            string unityExpansionsPath = GetExpansionsUnityPath();
+            if (string.IsNullOrEmpty(unityExpansionsPath)) return;
+
+            string expansionsPath = GetExpansionsPath();
+            if (!Directory.Exists(expansionsPath)) return;
+
+            string[] subfolders = Directory.GetDirectories(expansionsPath);
+            foreach (string folder in subfolders)
+            {
+                string folderName = Path.GetFileName(folder);
+
+                if (folderName.StartsWith(".")) continue;
+
+                ExpansionInfo info = new ExpansionInfo
+                {
+                    folderName = folderName,
+                    config = null
+                };
+
+                string configPath = $"{unityExpansionsPath}/{folderName}/Config.asset";
+                info.config = AssetDatabase.LoadAssetAtPath<ExpansionConfig>(configPath);
+
+                _expansions.Add(info);
+            }
+
+            _expansions = _expansions.OrderBy(e => e.config != null ? e.config.displayName : e.folderName).ToList();
+        }
+
+        private string GetExpansionsPath()
+        {
+            string[] guids = AssetDatabase.FindAssets("t:Script StrangeToolkitWindow");
+            if (guids.Length > 0)
+            {
+                string scriptPath = AssetDatabase.GUIDToAssetPath(guids[0]);
+                string packageRoot = Path.GetDirectoryName(Path.GetDirectoryName(scriptPath));
+                string expansionsPath = Path.Combine(packageRoot, "Expansions");
+
+                if (expansionsPath.StartsWith("Assets/"))
+                {
+                    expansionsPath = Path.Combine(Application.dataPath, expansionsPath.Substring(7));
+                }
+                else if (expansionsPath.StartsWith("Packages/"))
+                {
+                    string packagePath = Path.GetFullPath(Path.Combine(Application.dataPath, "..", expansionsPath));
+                    if (Directory.Exists(packagePath)) return packagePath;
+                }
+
+                return expansionsPath;
+            }
+            return Path.Combine(Application.dataPath, "StrangeToolkit/Expansions");
+        }
+
+        private string GetExpansionsUnityPath()
+        {
+            string[] guids = AssetDatabase.FindAssets("t:Script StrangeToolkitWindow");
+            if (guids.Length > 0)
+            {
+                string scriptPath = AssetDatabase.GUIDToAssetPath(guids[0]);
+                string packageRoot = Path.GetDirectoryName(Path.GetDirectoryName(scriptPath));
+                return packageRoot.Replace("\\", "/") + "/Expansions";
+            }
+            return "Assets/StrangeToolkit/Expansions";
+        }
+
+        // --- Helpers ---
         private void SimpleScan()
         {
             _tVRC_LPPV = FindScriptType("VRCLightProbeProxyVolume");
@@ -755,6 +993,7 @@ namespace StrangeToolkit
             _cachedHub = null;
             _realtimeLights.Clear();
             _nonStaticObjects.Clear();
+            _brokenStaticObjects.Clear();
             _auditorHasRun = false;
             _auditorClean = false;
             _heaviestMeshes.Clear();
@@ -762,10 +1001,12 @@ namespace StrangeToolkit
             _registry = new SceneRegistry();
             _weightScanRun = false;
             _totalVRAMBytes = 0;
-            _totalDiskBytes = 0;
+            _usingBuildData = false;
+            _buildDataSize = "";
             _occlusionSize = 0;
             _lastSnapshot = null;
             _shadersLoaded = false;
+            ScanForExpansions();
             Repaint();
         }
 
@@ -773,6 +1014,7 @@ namespace StrangeToolkit
         {
             _realtimeLights.Clear();
             _nonStaticObjects.Clear();
+            _brokenStaticObjects.Clear();
             _auditorHasRun = true;
 
             Light[] allLights = FindObjectsOfType<Light>();
@@ -785,35 +1027,50 @@ namespace StrangeToolkit
             MeshRenderer[] allRenderers = FindObjectsOfType<MeshRenderer>();
             foreach (var r in allRenderers)
             {
-                if (!r.gameObject.isStatic)
+                string dynamicReason = CheckIfDynamic(r.gameObject);
+
+                if (r.gameObject.isStatic)
                 {
-                    // SMART SCAN CHECK
-                    string exemptReason = CheckIfDynamic(r.gameObject);
-                    _nonStaticObjects.Add(new NonStaticEntry { 
-                        obj = r.gameObject, 
-                        reason = exemptReason 
+                    if (!string.IsNullOrEmpty(dynamicReason))
+                    {
+                        _brokenStaticObjects.Add(new BrokenStaticEntry
+                        {
+                            obj = r.gameObject,
+                            reason = dynamicReason
+                        });
+                    }
+                }
+                else
+                {
+                    _nonStaticObjects.Add(new NonStaticEntry
+                    {
+                        obj = r.gameObject,
+                        reason = dynamicReason
                     });
                 }
             }
 
             _occlusionSize = StaticOcclusionCulling.umbraDataSize;
-            
-            // Auditor is clean only if there are no lights AND no *fixable* static objects
             bool noFixableObjects = !_nonStaticObjects.Any(x => x.IsSafeToStatic);
-            _auditorClean = (_realtimeLights.Count == 0 && noFixableObjects && _occlusionSize > 0);
+            _auditorClean = (_realtimeLights.Count == 0 && noFixableObjects && _brokenStaticObjects.Count == 0 && _occlusionSize > 0);
         }
 
         private string CheckIfDynamic(GameObject go)
         {
             if (go.GetComponent<Animator>() != null) return "Has Animator";
             if (go.GetComponent<Animation>() != null) return "Has Animation";
-            if (go.GetComponent<Rigidbody>() != null) return "Has Rigidbody";
-            
-            // String check avoids error if VRC SDK is missing
-            if (go.GetComponent("VRCPickup") != null || go.GetComponent("VRC.SDK3.Components.VRCPickup") != null) 
-                return "Is Pickup";
+            if (go.GetComponentInParent<Rigidbody>() != null) return "Has Rigidbody (self or parent)";
 
-            return null; // Is safe to fix
+            // Check parents for VRCPickup (string check avoids SDK dependency)
+            Transform current = go.transform;
+            while (current != null)
+            {
+                if (current.GetComponent("VRCPickup") != null || current.GetComponent("VRC.SDK3.Components.VRCPickup") != null)
+                    return "Is Pickup (self or parent)";
+                current = current.parent;
+            }
+
+            return null;
         }
 
         private void FixLights()
@@ -830,7 +1087,6 @@ namespace StrangeToolkit
 
         private void FixStatic()
         {
-            // Only fix objects that are SAFE to fix
             var safeObjects = _nonStaticObjects
                 .Where(x => x.IsSafeToStatic)
                 .Select(x => x.obj)
@@ -840,6 +1096,21 @@ namespace StrangeToolkit
             foreach (var go in safeObjects)
             {
                 go.isStatic = true;
+                EditorUtility.SetDirty(go);
+            }
+            RunAuditorScan();
+        }
+
+        private void FixBrokenStatic()
+        {
+            var brokenObjects = _brokenStaticObjects
+                .Select(x => x.obj)
+                .ToArray();
+
+            Undo.RecordObjects(brokenObjects, "Fix Broken Static");
+            foreach (var go in brokenObjects)
+            {
+                go.isStatic = false;
                 EditorUtility.SetDirty(go);
             }
             RunAuditorScan();
@@ -1239,7 +1510,7 @@ namespace StrangeToolkit
             GUILayout.Space(5);
             GUILayout.Label("Quest Optimization Helper", _subHeaderStyle);
             GUILayout.Space(5);
-            DrawMetricBar("Estimated Download Size (Limit 100MB)", _totalDiskBytes, 85.0f, 50.0f, true);
+            DrawMetricBar("Estimated Download Size (Limit 100MB)", _totalVRAMBytes, 85.0f, 50.0f, true);
             GUILayout.Space(10);
             DrawMetricBar("Estimated Texture Memory (VRAM)", _totalVRAMBytes, 99999.0f, 99999.0f, false);
             EditorGUILayout.EndVertical();
@@ -1300,37 +1571,143 @@ namespace StrangeToolkit
 
         private void DrawMeshInspector()
         {
+            long totalMeshMem = _heaviestMeshes.Sum(m => m.memSize);
+            long totalTris = _heaviestMeshes.Sum(m => m.triCount);
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label($"Total Mesh Memory: {TextureVRAMCalculator.FormatSize(totalMeshMem)}", EditorStyles.boldLabel);
+            GUILayout.FlexibleSpace();
+            GUILayout.Label($"{_heaviestMeshes.Count} meshes | {totalTris:N0} tris", EditorStyles.miniLabel);
+            EditorGUILayout.EndHorizontal();
+            GUILayout.Space(5);
+
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label("Mesh", EditorStyles.miniLabel, GUILayout.Width(180));
+            GUILayout.Label("Triangles", EditorStyles.miniLabel, GUILayout.Width(80));
+            GUILayout.FlexibleSpace();
+            GUILayout.Label("Memory", EditorStyles.miniLabel, GUILayout.Width(70));
+            GUILayout.Space(55);
+            EditorGUILayout.EndHorizontal();
+
             for (int i = 0; i < _heaviestMeshes.Count; i++)
             {
                 var h = _heaviestMeshes[i];
                 if (h.obj == null) continue;
 
                 EditorGUILayout.BeginHorizontal(_listItemStyle);
-                GUILayout.Label($"{i + 1}. {h.obj.name}", GUILayout.Width(200));
-                GUILayout.Label($"{h.triCount} tris | VRAM: {EditorUtility.FormatBytes(h.memSize)}");
-                if (GUILayout.Button("Sel", GUILayout.Width(40))) Selection.activeGameObject = h.obj;
+
+                string meshName = h.obj.name;
+                if (meshName.Length > 25) meshName = meshName.Substring(0, 22) + "...";
+                GUILayout.Label($"{i + 1}. {meshName}", EditorStyles.boldLabel, GUILayout.Width(180));
+
+                GUILayout.Label($"{h.triCount:N0} tris", EditorStyles.miniLabel, GUILayout.Width(80));
+                GUILayout.FlexibleSpace();
+                GUILayout.Label(TextureVRAMCalculator.FormatSize(h.memSize), GUILayout.Width(70));
+                if (GUILayout.Button("Select", GUILayout.Width(50))) Selection.activeGameObject = h.obj;
                 EditorGUILayout.EndHorizontal();
             }
         }
 
         private void DrawTextureInspector()
         {
+            long totalFileSize = _heaviestTextures.Sum(t => t.memSize);
+            long totalVRAM = _heaviestTextures.Sum(t => t.vramSize);
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label($"Total: {TextureVRAMCalculator.FormatSize(totalFileSize)} file | {TextureVRAMCalculator.FormatSize(totalVRAM)} VRAM", EditorStyles.boldLabel);
+            GUILayout.FlexibleSpace();
+            GUILayout.Label($"{_heaviestTextures.Count} textures", EditorStyles.miniLabel);
+            EditorGUILayout.EndHorizontal();
+            GUILayout.Space(5);
+
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label("Texture", EditorStyles.miniLabel, GUILayout.Width(220));
+            GUILayout.Label("Size", EditorStyles.miniLabel, GUILayout.Width(60));
+            GUILayout.Label("Format", EditorStyles.miniLabel, GUILayout.Width(90));
+            GUILayout.FlexibleSpace();
+            GUILayout.Label("VRAM", EditorStyles.miniLabel, GUILayout.Width(70));
+            GUILayout.Space(55);
+            EditorGUILayout.EndHorizontal();
+
             for (int i = 0; i < _heaviestTextures.Count; i++)
             {
                 var h = _heaviestTextures[i];
                 if (h.tex == null) continue;
 
                 EditorGUILayout.BeginHorizontal(_listItemStyle);
-                GUILayout.Label($"{i + 1}. {h.tex.name}", GUILayout.Width(200));
-                GUILayout.Label($"VRAM: {EditorUtility.FormatBytes(h.memSize)} | Disk: {EditorUtility.FormatBytes(h.diskSize)}");
-                if (GUILayout.Button("Sel", GUILayout.Width(40))) Selection.activeObject = h.tex;
+
+                string texName = h.tex.name;
+                if (texName.Length > 28) texName = texName.Substring(0, 25) + "...";
+                GUILayout.Label($"{i + 1}. {texName}", EditorStyles.boldLabel, GUILayout.Width(220));
+
+                int currentRes = Mathf.Max(h.width > 0 ? h.width : h.tex.width, h.height > 0 ? h.height : h.tex.height);
+                string[] sizeLabels = new string[_textureSizeOptionsBase.Length + 1];
+                int[] sizeOptions = new int[_textureSizeOptionsBase.Length + 1];
+                sizeLabels[0] = currentRes.ToString();
+                sizeOptions[0] = currentRes;
+                for (int j = 0; j < _textureSizeOptionsBase.Length; j++)
+                {
+                    sizeLabels[j + 1] = _textureSizeOptionsBase[j].ToString();
+                    sizeOptions[j + 1] = _textureSizeOptionsBase[j];
+                }
+
+                TextureImporter importer = !string.IsNullOrEmpty(h.assetPath) ? AssetImporter.GetAtPath(h.assetPath) as TextureImporter : null;
+                bool canEdit = importer != null;
+
+                EditorGUI.BeginDisabledGroup(!canEdit);
+                int newResIndex = EditorGUILayout.Popup(0, sizeLabels, GUILayout.Width(60));
+                if (newResIndex != 0 && canEdit)
+                {
+                    ChangeTextureSize(importer, sizeOptions[newResIndex]);
+                }
+
+                string[] formatLabels = new string[] { h.compressionFormat, "BC7", "DXT1", "DXT5", "ASTC 6x6" };
+                int newFormatIndex = EditorGUILayout.Popup(0, formatLabels, GUILayout.Width(90));
+                if (newFormatIndex != 0 && canEdit)
+                {
+                    ChangeTextureCompression(importer, _compressionOptions[newFormatIndex]);
+                }
+                EditorGUI.EndDisabledGroup();
+
+                GUILayout.FlexibleSpace();
+                GUILayout.Label(TextureVRAMCalculator.FormatSize(h.vramSize), GUILayout.Width(70));
+
+                if (GUILayout.Button("Select", GUILayout.Width(50))) Selection.activeObject = h.tex;
                 EditorGUILayout.EndHorizontal();
             }
         }
 
+        private void ChangeTextureSize(TextureImporter importer, int newSize)
+        {
+            importer.maxTextureSize = newSize;
+            TextureImporterPlatformSettings settings = importer.GetPlatformTextureSettings("PC");
+            settings.maxTextureSize = newSize;
+            importer.SetPlatformTextureSettings(settings);
+            importer.SaveAndReimport();
+            AnalyzeSceneWeight();
+        }
+
+        private void ChangeTextureCompression(TextureImporter importer, TextureImporterFormat format)
+        {
+            importer.SetPlatformTextureSettings(new TextureImporterPlatformSettings()
+            {
+                name = "PC",
+                overridden = format != TextureImporterFormat.Automatic,
+                format = format,
+                maxTextureSize = importer.maxTextureSize,
+                compressionQuality = 100
+            });
+            importer.SaveAndReimport();
+            AnalyzeSceneWeight();
+        }
+
         private void DrawAudioMiscInspector()
         {
-            GUILayout.Label("Heavy Audio Assets", EditorStyles.boldLabel);
+            long totalAudioMem = _registry.audio.Sum(a => a.memSize);
+            EditorGUILayout.BeginHorizontal();
+            GUILayout.Label($"Total Audio Memory: {TextureVRAMCalculator.FormatSize(totalAudioMem)}", EditorStyles.boldLabel);
+            GUILayout.FlexibleSpace();
+            GUILayout.Label($"{_registry.audio.Count} clips", EditorStyles.miniLabel);
+            EditorGUILayout.EndHorizontal();
+            GUILayout.Space(5);
 
             if (_registry.audio.Count == 0)
             {
@@ -1338,22 +1715,33 @@ namespace StrangeToolkit
             }
             else
             {
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.Label("Audio Clip", EditorStyles.miniLabel, GUILayout.Width(180));
+                GUILayout.FlexibleSpace();
+                GUILayout.Label("Memory", EditorStyles.miniLabel, GUILayout.Width(70));
+                GUILayout.Space(55);
+                EditorGUILayout.EndHorizontal();
+
                 for (int i = 0; i < _registry.audio.Count; i++)
                 {
                     var h = _registry.audio[i];
                     if (h.obj == null) continue;
 
                     EditorGUILayout.BeginHorizontal(_listItemStyle);
-                    GUILayout.Label($"{i + 1}. {h.obj.name}", GUILayout.Width(200));
-                    // UPDATED: Now sorts and displays Disk Size correctly
-                    GUILayout.Label($"Size: {EditorUtility.FormatBytes(h.diskSize)}");
-                    if (GUILayout.Button("Sel", GUILayout.Width(40))) Selection.activeObject = h.obj;
+
+                    string audioName = h.obj.name;
+                    if (audioName.Length > 25) audioName = audioName.Substring(0, 22) + "...";
+                    GUILayout.Label($"{i + 1}. {audioName}", EditorStyles.boldLabel, GUILayout.Width(180));
+
+                    GUILayout.FlexibleSpace();
+                    GUILayout.Label(TextureVRAMCalculator.FormatSize(h.memSize), GUILayout.Width(70));
+                    if (GUILayout.Button("Select", GUILayout.Width(50))) Selection.activeObject = h.obj;
                     EditorGUILayout.EndHorizontal();
                 }
             }
 
             GUILayout.Space(10);
-            GUILayout.Label("Active Shaders", EditorStyles.boldLabel);
+            GUILayout.Label($"Active Shaders ({_registry.shaders.Count})", EditorStyles.boldLabel);
             foreach (var s in _registry.shaders)
                 GUILayout.Label($"• {s}", EditorStyles.miniLabel);
         }
@@ -1361,38 +1749,87 @@ namespace StrangeToolkit
         private void AnalyzeSceneWeight()
         {
             _totalVRAMBytes = 0;
-            _totalDiskBytes = 0;
+            _usingBuildData = false;
+            _buildDataSize = "";
 
-            // Analyze meshes - group by unique mesh
-            var meshFilters = FindObjectsOfType<MeshFilter>().Where(m => m.sharedMesh != null);
-            var uniqueMeshes = new Dictionary<Mesh, HeavyMesh>();
-
-            foreach (var mf in meshFilters)
+            var buildData = BuildDataReader.ReadBuildLog();
+            if (buildData != null && buildData.isFromBuild)
             {
-                Mesh mesh = mf.sharedMesh;
-                if (!uniqueMeshes.ContainsKey(mesh))
-                {
-                    long vram = Profiler.GetRuntimeMemorySizeLong(mesh);
-                    long disk = vram / 2;
-                    uniqueMeshes[mesh] = new HeavyMesh
-                    {
-                        obj = mf.gameObject,
-                        triCount = mesh.triangles.Length / 3,
-                        memSize = vram,
-                        diskSize = disk
-                    };
-                }
+                _usingBuildData = true;
+                _buildDataSize = buildData.totalCompressedSize;
+                AnalyzeFromBuildData(buildData);
             }
-            // Sort Meshes by VRAM
-            _heaviestMeshes = uniqueMeshes.Values.OrderByDescending(x => x.memSize).ToList();
+            else
+            {
+                AnalyzeFromScene();
+            }
+
+            _weightScanRun = true;
+        }
+
+        private void AnalyzeFromBuildData(BuildDataReader.BuildData buildData)
+        {
+            _heaviestTextures = buildData.textures
+                .Select(t =>
+                {
+                    string format = t.format ?? "Unknown";
+                    bool hasQuestCompression = false;
+                    Texture tex = t.asset as Texture;
+                    if (tex != null)
+                    {
+                        hasQuestCompression = TextureVRAMCalculator.HasQuestCompression(tex);
+                    }
+                    if (!hasQuestCompression)
+                    {
+                        hasQuestCompression = TextureVRAMCalculator.IsQuestCompressedFormat(format);
+                    }
+
+                    long vramSize = tex != null ? TextureVRAMCalculator.CalculateTextureSize(tex) : (long)t.sizeBytes;
+
+                    return new HeavyTexture
+                    {
+                        tex = tex,
+                        memSize = (long)t.sizeBytes,
+                        vramSize = vramSize,
+                        width = t.width,
+                        height = t.height,
+                        compressionFormat = format,
+                        isCompressed = hasQuestCompression,
+                        assetPath = t.path
+                    };
+                })
+                .OrderByDescending(x => x.memSize)
+                .ToList();
+
+            _totalVRAMBytes = buildData.totalTextureBytes;
+            AnalyzeMeshesFromScene();
+            _totalVRAMBytes += _heaviestMeshes.Sum(m => m.memSize);
+
+            _registry = new SceneRegistry();
+            _registry.audio = buildData.audio
+                .Select(a => {
+                    string assetPath = a.path;
+                    if (!assetPath.StartsWith("Assets/") && !assetPath.StartsWith("Packages/"))
+                        assetPath = "Assets/" + assetPath;
+                    return new HeavyAsset { obj = AssetDatabase.LoadAssetAtPath<AudioClip>(assetPath), memSize = (long)a.sizeBytes };
+                })
+                .Where(a => a.obj != null)
+                .OrderByDescending(a => a.memSize)
+                .ToList();
+
+            _totalVRAMBytes += buildData.totalAudioBytes;
+            CollectShadersFromScene();
+        }
+
+        private void AnalyzeFromScene()
+        {
+            AnalyzeMeshesFromScene();
 
             foreach (var m in _heaviestMeshes)
             {
                 _totalVRAMBytes += m.memSize;
-                _totalDiskBytes += m.diskSize;
             }
 
-            // Analyze textures
             HashSet<Texture> uniqueTextures = new HashSet<Texture>();
             Renderer[] renderers = FindObjectsOfType<Renderer>();
 
@@ -1428,24 +1865,34 @@ namespace StrangeToolkit
                 }
             }
 
-            // Sort Textures by VRAM
             _heaviestTextures = uniqueTextures
                 .Select(t =>
                 {
-                    long vram = Profiler.GetRuntimeMemorySizeLong(t);
-                    long disk = GetFileSize(t);
-                    return new HeavyTexture { tex = t, memSize = vram, diskSize = disk };
+                    long vram = TextureVRAMCalculator.CalculateTextureSize(t);
+                    var formatInfo = TextureVRAMCalculator.GetTextureFormatInfo(t);
+                    bool hasQuestCompression = TextureVRAMCalculator.HasQuestCompression(t);
+                    string path = AssetDatabase.GetAssetPath(t);
+
+                    return new HeavyTexture
+                    {
+                        tex = t,
+                        memSize = vram,
+                        vramSize = vram,
+                        width = t.width,
+                        height = t.height,
+                        isCompressed = hasQuestCompression,
+                        compressionFormat = formatInfo.format,
+                        assetPath = path
+                    };
                 })
                 .OrderByDescending(x => x.memSize)
                 .ToList();
 
             foreach (var t in _heaviestTextures)
             {
-                _totalVRAMBytes += t.memSize;
-                _totalDiskBytes += t.diskSize;
+                _totalVRAMBytes += t.vramSize;
             }
 
-            // Analyze audio
             _registry = new SceneRegistry();
 
             var audioClips = FindObjectsOfType<AudioSource>()
@@ -1454,12 +1901,10 @@ namespace StrangeToolkit
                 .Distinct()
                 .Select(c =>
                 {
-                    long vram = Profiler.GetRuntimeMemorySizeLong(c);
-                    long disk = GetFileSize(c);
-                    return new HeavyAsset { obj = c, memSize = vram, diskSize = disk };
+                    long size = Profiler.GetRuntimeMemorySizeLong(c);
+                    return new HeavyAsset { obj = c, memSize = size };
                 })
-                // CHANGED: Audio is now sorted by Disk Size (heaviest first)
-                .OrderByDescending(c => c.diskSize)
+                .OrderByDescending(c => c.memSize)
                 .ToList();
 
             _registry.audio = audioClips;
@@ -1467,11 +1912,38 @@ namespace StrangeToolkit
             foreach (var a in _registry.audio)
             {
                 _totalVRAMBytes += a.memSize;
-                _totalDiskBytes += a.diskSize;
             }
 
-            // Collect shaders
+            CollectShadersFromScene();
+        }
+
+        private void AnalyzeMeshesFromScene()
+        {
+            var meshFilters = FindObjectsOfType<MeshFilter>().Where(m => m.sharedMesh != null);
+            var uniqueMeshes = new Dictionary<Mesh, HeavyMesh>();
+
+            foreach (var mf in meshFilters)
+            {
+                Mesh mesh = mf.sharedMesh;
+                if (!uniqueMeshes.ContainsKey(mesh))
+                {
+                    long vram = Profiler.GetRuntimeMemorySizeLong(mesh);
+                    uniqueMeshes[mesh] = new HeavyMesh
+                    {
+                        obj = mf.gameObject,
+                        triCount = mesh.triangles.Length / 3,
+                        memSize = vram
+                    };
+                }
+            }
+            _heaviestMeshes = uniqueMeshes.Values.OrderByDescending(x => x.memSize).ToList();
+        }
+
+        private void CollectShadersFromScene()
+        {
             HashSet<string> shaderNames = new HashSet<string>();
+            Renderer[] renderers = FindObjectsOfType<Renderer>();
+
             foreach (var r in renderers)
             {
                 foreach (var m in r.sharedMaterials)
@@ -1481,24 +1953,6 @@ namespace StrangeToolkit
                 }
             }
             _registry.shaders = shaderNames.ToList();
-
-            _weightScanRun = true;
-        }
-
-        private long GetFileSize(UnityEngine.Object obj)
-        {
-            string path = AssetDatabase.GetAssetPath(obj);
-            if (string.IsNullOrEmpty(path)) return 0;
-            if (!path.StartsWith("Assets") && !path.StartsWith("Packages")) return 0;
-
-            try
-            {
-                return new FileInfo(path).Length;
-            }
-            catch
-            {
-                return 0;
-            }
         }
 
         private void AddAtmosphere(SerializedObject so)
@@ -1672,8 +2126,7 @@ namespace StrangeToolkit
                     normal = { textColor = new Color(0.6f, 0.8f, 1f) }
                 };
             }
-            
-            // NEW STYLE FOR IGNORED OBJECTS
+
             if (_ignoredStyle == null)
             {
                 _ignoredStyle = new GUIStyle(EditorStyles.label)

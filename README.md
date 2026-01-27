@@ -8,6 +8,8 @@
 
 A Unity editor toolkit for VRChat world creators. Provides atmosphere presets, smart toggles with persistence, world auditing, and optimization tools.
 
+> **Warning**: This toolkit is still a work in progress and may cause unexpected issues. Please back up your project before use.
+
 ## Features
 
 ### Strange Hub
@@ -33,7 +35,7 @@ Access via `Strange Toolkit > Open Dashboard`:
 
 ## Installation
 
-Download the latest release and import into your project. Use the in-editor button to add to VPM.
+Download the latest release and import into your project. Use the in-editor button to add to VPM, or [add via the website](https://bellastrangevr.github.io/StrangeToolkit/).
 
 ## License
 

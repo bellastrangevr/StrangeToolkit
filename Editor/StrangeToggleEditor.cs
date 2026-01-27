@@ -123,9 +123,9 @@ public class StrangeToggleEditor : Editor
         {
             cardStyle = new GUIStyle(EditorStyles.helpBox);
             cardStyle.padding = new RectOffset(10, 10, 10, 10);
-            cardStyle.normal.background = Texture2D.whiteTexture; // Optional contrast
+            // Use theme-aware background (don't override with white)
         }
-        
+
         if (headerStyle == null)
         {
             headerStyle = new GUIStyle(EditorStyles.largeLabel);
