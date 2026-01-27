@@ -1,0 +1,84 @@
+name: Build VPM Listing
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published, created, edited]
+  workflow_run:
+    workflows: [Build Release]
+    types:
+      - completed
+
+permissions:
+  contents: write
+
+env:
+  packageName: "com.bellastrangevr.strangetoolkit"
+
+jobs:
+  build-listing:
+    name: Build VPM Listing
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build VPM Listing from Releases
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            // Get all releases
+            const releases = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+
+            // Build versions object
+            const versions = {};
+
+            for (const release of releases.data) {
+              const packageJsonAsset = release.assets.find(asset => asset.name === 'package.json');
+              if (packageJsonAsset) {
+                const assetData = await github.rest.repos.getReleaseAsset({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  asset_id: packageJsonAsset.id,
+                  headers: {
+                    accept: 'application/octet-stream'
+                  }
+                });
+
+                const packageData = JSON.parse(Buffer.from(assetData.data).toString('utf8'));
+                const version = packageData.version;
+                versions[version] = packageData;
+                console.log(`Added version ${version} from ${release.tag_name}`);
+              } else {
+                console.log(`Skipping release ${release.tag_name}: no package.json found`);
+              }
+            }
+
+            // Build final VPM listing
+            const vpmListing = {
+              name: "Strange Toolkit VPM Repository",
+              id: "${{ env.packageName }}",
+              url: `https://github.com/${context.repo.owner}/${context.repo.repo}/releases/latest/download/vpm.json`,
+              author: "bellastrangevr",
+              packages: {
+                "${{ env.packageName }}": {
+                  versions: versions
+                }
+              }
+            };
+
+            // Write to file
+            fs.writeFileSync('vpm.json', JSON.stringify(vpmListing, null, 2));
+
+      - name: Commit and Push Listing
+        run: |
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+          git add -f vpm.json
+          git diff --quiet && git diff --staged --quiet || git commit -m "Update VPM listing"
+          git push

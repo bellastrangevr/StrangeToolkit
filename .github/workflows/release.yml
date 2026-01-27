@@ -1,0 +1,90 @@
+name: Build Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: main
+    paths:
+      - package.json
+
+env:
+  packageName: "com.bellastrangevr.strangetoolkit"
+  packagePath: "Packages/com.bellastrangevr.strangetoolkit"
+  packageFileName: "StrangeToolkit"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get Version
+        id: version
+        uses: zoexx/github-action-json-file-properties@b9f36ce6ee6fe2680cd3c32b2c62e22eade7e590
+        with:
+          file_path: "./package.json"
+          prop_path: "version"
+
+      - name: Generate Tag
+        id: tag
+        run: echo prop="v${{ steps.version.outputs.value }}" >> $GITHUB_OUTPUT
+
+      - name: Check If Release Tag Exists
+        id: checkReleaseTag
+        uses: mukunku/tag-exists-action@v1.6.0
+        with:
+          tag: ${{ steps.tag.outputs.prop }}
+
+      - name: Set Environment Variables
+        if: ${{ steps.checkReleaseTag.outputs.exists == 'false' }}
+        run: |
+          echo "zipFile=${{ env.packageFileName }}_v${{ steps.version.outputs.value }}_VPM".zip >> $GITHUB_ENV
+
+      - name: Set ZIP Url
+        if: ${{ steps.checkReleaseTag.outputs.exists == 'false' }}
+        uses: jossef/action-set-json-field@v2.1
+        with:
+          file: ./package.json
+          field: url
+          value: 'https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.prop }}/${{ env.zipFile }}'
+
+      - name: Create directory and move files
+        if: ${{ steps.checkReleaseTag.outputs.exists == 'false' }}
+        run: |
+          mkdir -p ${{env.packagePath}}
+          rsync -r --exclude="Packages" --exclude=".git" --exclude=".github" ./ "${{ env.packagePath }}"/
+
+      - name: Create Zip
+        if: ${{ steps.checkReleaseTag.outputs.exists == 'false' }}
+        uses: thedoctor0/zip-release@09336613be18a8208dfa66bd57efafd9e2685657
+        with:
+          type: "zip"
+          directory: "${{env.packagePath}}/"
+          filename: "../../${{env.zipFile}}"
+          exclusions: "*.git* *.github* .gitignore .gitattributes vpm.json README.md"
+
+      - name: Extract Changelog
+        if: ${{ steps.checkReleaseTag.outputs.exists == 'false' }}
+        id: changelog
+        run: |
+          VERSION="${{ steps.version.outputs.value }}"
+          CHANGELOG=$(awk "/^## \[${VERSION}\]/{flag=1; next} /^## \[/{flag=0} flag" CHANGELOG.md)
+          echo "content<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Make Release
+        if: ${{ steps.checkReleaseTag.outputs.exists == 'false' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "${{ env.packageFileName }} v${{ steps.version.outputs.value }}"
+          tag_name: "v${{ steps.version.outputs.value }}"
+          body: ${{ steps.changelog.outputs.content }}
+          files: |
+            ${{ env.zipFile }}
+            ./package.json
