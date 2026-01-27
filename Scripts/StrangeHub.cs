@@ -16,62 +16,67 @@ public class StrangeHub : UdonSharpBehaviour
     public Color[] atmoFogColors;
     public float[] atmoFogDensities;
     
-    // Logic (Linked Objects - use these for Post Processing Volumes!)
+    // Logic (Linked Objects)
     public GameObject[] atmoRoots; 
 
     // --- 2. LOGIC DATA ---
     public GameObject[] cleanupProps;
     
-    // --- 3. TOGGLE PERSISTENCE ---
+    // --- 3. OPTIMIZED TOGGLE PERSISTENCE ---
     private string[] _toggleIDs;
     private bool[] _toggleValues;
+    private int _toggleCount = 0; // Tracks how many slots are actually used
+    private const int CHUNK_SIZE = 32; // How many slots to add at once
     
     public void SaveToggleState(string id, bool state)
     {
+        // 1. Initialization: Create the first chunk if array is missing
         if (_toggleIDs == null)
         {
-            _toggleIDs = new string[0];
-            _toggleValues = new bool[0];
+            _toggleIDs = new string[CHUNK_SIZE];
+            _toggleValues = new bool[CHUNK_SIZE];
+            _toggleCount = 0;
         }
 
-        int index = -1;
-        for (int i = 0; i < _toggleIDs.Length; i++)
+        // 2. Search: Check if this ID already exists in the used slots
+        for (int i = 0; i < _toggleCount; i++)
         {
             if (_toggleIDs[i] == id)
             {
-                index = i;
-                break;
+                _toggleValues[i] = state;
+                return; // Found and updated, exit early
             }
         }
 
-        if (index != -1)
+        // 3. Expansion: If we are out of empty slots, Resize!
+        if (_toggleCount >= _toggleIDs.Length)
         {
-            _toggleValues[index] = state;
-        }
-        else
-        {
-            string[] newIDs = new string[_toggleIDs.Length + 1];
-            bool[] newVals = new bool[_toggleValues.Length + 1];
+            string[] newIDs = new string[_toggleIDs.Length + CHUNK_SIZE];
+            bool[] newVals = new bool[_toggleValues.Length + CHUNK_SIZE];
             
-            for(int i=0; i<_toggleIDs.Length; i++)
+            // Copy existing data to new arrays
+            for(int i = 0; i < _toggleIDs.Length; i++)
             {
                 newIDs[i] = _toggleIDs[i];
                 newVals[i] = _toggleValues[i];
             }
             
-            newIDs[newIDs.Length - 1] = id;
-            newVals[newVals.Length - 1] = state;
-            
             _toggleIDs = newIDs;
             _toggleValues = newVals;
         }
+
+        // 4. Insertion: Add the new data into the next open slot
+        _toggleIDs[_toggleCount] = id;
+        _toggleValues[_toggleCount] = state;
+        _toggleCount++; // Increment the counter
     }
 
     public bool LoadToggleState(string id, bool defaultState)
     {
         if (_toggleIDs == null) return defaultState;
 
-        for (int i = 0; i < _toggleIDs.Length; i++)
+        // Optimization: Only loop through the *used* slots (_toggleCount), not the empty ones.
+        for (int i = 0; i < _toggleCount; i++)
         {
             if (_toggleIDs[i] == id) return _toggleValues[i];
         }

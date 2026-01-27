@@ -12,7 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c333ccfdd0cbdbc4ca30cef2dd6e6b9b, type: 3}
   m_Name: StrangeToggle
   m_EditorClassIdentifier: 
-  serializedUdonProgramAsset: {fileID: 11400000, guid: c2e1ce0388c2bf8428747b821e692004, type: 2}
+  serializedUdonProgramAsset: {fileID: 11400000, guid: 64be8b0f2f564fd4994633760b4a1486,
+    type: 2}
   udonAssembly: 
   assemblyError: 
   sourceCsScript: {fileID: 11500000, guid: cf7fe81e51c9af1479e6bb5f51a6ea48, type: 3}

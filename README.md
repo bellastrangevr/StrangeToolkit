@@ -31,10 +31,6 @@ Access via `Strange Toolkit > Open Dashboard`:
 - **Interactables Tab** - Quickly add smart toggles to objects
 - **Auditor Tab** - Performance scanning, occlusion culling checks, asset weight analysis
 
-### Expansions (Beta)
-- **DJ Mode** - Stage lighting control via unified animator
-- **Game Mode** - RPG-style vitals and loot systems
-
 ## Installation
 
 Download the latest release and import into your project. Use the in-editor button to add to VPM.

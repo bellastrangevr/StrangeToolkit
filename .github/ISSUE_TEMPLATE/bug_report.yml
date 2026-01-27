@@ -48,8 +48,6 @@ body:
         - Visuals Tab
         - Interactables Tab
         - Auditor Tab
-        - DJ Mode Expansion
-        - Game Mode Expansion
         - Other
     validations:
       required: true

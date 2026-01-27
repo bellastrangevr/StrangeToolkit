@@ -12,7 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c333ccfdd0cbdbc4ca30cef2dd6e6b9b, type: 3}
   m_Name: StrangeAtmosphereSwitch
   m_EditorClassIdentifier: 
-  serializedUdonProgramAsset: {fileID: 11400000, guid: 1e37d39c9e553f94683c7892b97007c1, type: 2}
+  serializedUdonProgramAsset: {fileID: 11400000, guid: 8613f0d14b27e4e47a803e2d82011b7d,
+    type: 2}
   udonAssembly: 
   assemblyError: 
   sourceCsScript: {fileID: 11500000, guid: 5a92dee8fd041624aadf98e46edbd87b, type: 3}

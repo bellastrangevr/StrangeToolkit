@@ -29,20 +29,28 @@ namespace StrangeToolkit
         public Dictionary<GameObject, bool> rootStates = new Dictionary<GameObject, bool>();
     }
 
+    // --- SMART ENTRY FOR NON-STATIC OBJECTS ---
+    public class NonStaticEntry
+    {
+        public GameObject obj;
+        public string reason; // Why it implies movement (e.g., "Animator")
+        public bool IsSafeToStatic => string.IsNullOrEmpty(reason);
+    }
+
     public class StrangeToolkitWindow : EditorWindow
     {
-        private enum ToolkitTab { World, Visuals, Interactables, Auditor, GameMode, DJMode }
+        private enum ToolkitTab { World, Visuals, Interactables, Auditor }
         private ToolkitTab _currentTab = ToolkitTab.World;
 
         private enum InspectorMode { Meshes, Textures, AudioMisc }
         private InspectorMode _inspectorMode = InspectorMode.Meshes;
 
         private GUIStyle _headerStyle, _subHeaderStyle, _warningStyle, _successStyle, _listItemStyle, _bigDropStyle, _cardStyle;
-        private GUIStyle _questSafeStyle, _questWarnStyle, _questDangerStyle, _infoStyle;
+        private GUIStyle _questSafeStyle, _questWarnStyle, _questDangerStyle, _infoStyle, _ignoredStyle;
         private GUIStyle _whitelistButtonStyle, _blacklistButtonStyle;
 
         private bool _scanComplete = false;
-        private Type _tVRC_LPPV, _tRedSim_LPPV, _tBakery, _tDJ, _tGame;
+        private Type _tVRC_LPPV, _tRedSim_LPPV, _tBakery;
 
         // Cached hub reference
         private StrangeHub _cachedHub;
@@ -51,7 +59,10 @@ namespace StrangeToolkit
 
         // AUDITOR DATA
         private List<Light> _realtimeLights = new List<Light>();
-        private List<GameObject> _nonStaticObjects = new List<GameObject>();
+        
+        // Changed to use the smart entry class
+        private List<NonStaticEntry> _nonStaticObjects = new List<NonStaticEntry>();
+        
         private bool _auditorHasRun = false, _auditorClean = false;
         private int _occlusionSize = 0;
         private Vector2 _realtimeLightsScrollPos;
@@ -148,8 +159,6 @@ namespace StrangeToolkit
                 case ToolkitTab.Visuals: DrawVisualsTab(); break;
                 case ToolkitTab.Interactables: DrawInteractablesTab(); break;
                 case ToolkitTab.Auditor: DrawAuditorTab(); break;
-                case ToolkitTab.GameMode: DrawGameModeTab(); break;
-                case ToolkitTab.DJMode: DrawDJModeTab(); break;
             }
 
             GUILayout.EndArea();
@@ -168,11 +177,6 @@ namespace StrangeToolkit
             DrawTabButton("Interactables", ToolkitTab.Interactables);
             DrawTabButton("Auditor", ToolkitTab.Auditor);
 
-            GUILayout.Space(20);
-            GUILayout.Label("EXPANSIONS", EditorStyles.boldLabel);
-            DrawTabButton("Game Mode", ToolkitTab.GameMode);
-            DrawTabButton("DJ Mode", ToolkitTab.DJMode);
-
             GUILayout.FlexibleSpace();
             if (GUILayout.Button("Refresh System")) RefreshSystem();
             GUILayout.Space(10);
@@ -190,7 +194,7 @@ namespace StrangeToolkit
         }
 
         // =========================================================
-        // 1. WORLD TAB (With Restore Safety System)
+        // 1. WORLD TAB
         // =========================================================
         private void DrawWorldTab()
         {
@@ -227,7 +231,6 @@ namespace StrangeToolkit
 
             _mainScrollPos = EditorGUILayout.BeginScrollView(_mainScrollPos);
 
-            // --- RESTORE SYSTEM UI ---
             if (_lastSnapshot != null)
             {
                 EditorGUILayout.BeginVertical(_cardStyle);
@@ -266,12 +269,10 @@ namespace StrangeToolkit
                 {
                     EditorGUILayout.BeginVertical(_cardStyle);
 
-                    // Header
                     EditorGUILayout.BeginHorizontal();
                     GUILayout.Label($"Preset {i+1}:", EditorStyles.boldLabel, GUILayout.Width(65));
                     pNames.GetArrayElementAtIndex(i).stringValue = EditorGUILayout.TextField(pNames.GetArrayElementAtIndex(i).stringValue);
 
-                    // PREVIEW BUTTON (With Safety Capture)
                     if (GUILayout.Button("Preview", GUILayout.Width(60)))
                     {
                         if (_lastSnapshot == null) CaptureVisuals(hub);
@@ -283,7 +284,6 @@ namespace StrangeToolkit
 
                     GUILayout.Space(5);
 
-                    // Default Toggle (Safe - Logic Only)
                     bool isDef = pDefaults.GetArrayElementAtIndex(i).boolValue;
                     bool newDef = EditorGUILayout.ToggleLeft("Load as Default (On World Start)", isDef);
                     if (newDef && !isDef)
@@ -326,7 +326,6 @@ namespace StrangeToolkit
 
             so.ApplyModifiedProperties();
             EditorGUILayout.EndVertical();
-
             GUILayout.Space(15);
 
             // Cleanup
@@ -334,7 +333,6 @@ namespace StrangeToolkit
             GUILayout.Space(5);
             GUILayout.Label("Object Auto-Cleanup", _subHeaderStyle);
             GUILayout.Space(5);
-
             EditorGUILayout.HelpBox("Use this to track loose objects (like pickupables). The Hub can reset them to their original positions if they get lost.", MessageType.Info);
 
             if (GUILayout.Button("Add Selected Objects to Cleanup List", GUILayout.Height(25)))
@@ -400,7 +398,7 @@ namespace StrangeToolkit
         }
 
         // =========================================================
-        // 2. AUDITOR TAB
+        // 2. AUDITOR TAB (UPDATED WITH TOGGLE SWITCHES)
         // =========================================================
         private void DrawAuditorTab()
         {
@@ -419,7 +417,6 @@ namespace StrangeToolkit
 
             if (_auditorHasRun)
             {
-                // Occlusion Status
                 if (_occlusionSize > 0)
                 {
                     string successMsg = $"Occlusion Culling Baked! ({EditorUtility.FormatBytes(_occlusionSize)})";
@@ -435,64 +432,115 @@ namespace StrangeToolkit
                 }
                 GUILayout.Space(10);
 
-                if (_auditorClean && _occlusionSize > 0)
+                // --- SMART FILTERING COUNTS ---
+                int safeToStaticCount = _nonStaticObjects.Count(x => x.IsSafeToStatic);
+                int ignoredCount = _nonStaticObjects.Count - safeToStaticCount;
+                
+                // Realtime Lights
+                if (_realtimeLights.Count > 0)
+                {
+                    string lightTooltip = "Realtime lights calculate lighting/shadows every frame. This consumes significant GPU performance.\n\nBaking saves lighting into static textures (Lightmaps).";
+                    DrawTooltipHelpBox($"{_realtimeLights.Count} Realtime Lights Detected", lightTooltip, MessageType.Warning);
+
+                    _realtimeLightsScrollPos = EditorGUILayout.BeginScrollView(_realtimeLightsScrollPos, GUILayout.Height(100));
+                    for (int i = 0; i < _realtimeLights.Count; i++)
+                    {
+                        var l = _realtimeLights[i];
+                        if (l == null) continue;
+                        EditorGUILayout.BeginHorizontal(_listItemStyle);
+                        GUILayout.Label(l.name, GUILayout.Width(200));
+                        GUILayout.FlexibleSpace();
+                        if (GUILayout.Button("Sel", GUILayout.Width(40))) Selection.activeGameObject = l.gameObject;
+                        EditorGUILayout.EndHorizontal();
+                    }
+                    EditorGUILayout.EndScrollView();
+
+                    GUILayout.Space(5);
+                    GUILayout.BeginHorizontal();
+                    if (GUILayout.Button("Select All")) { Selection.objects = _realtimeLights.ConvertAll(x => (UnityEngine.Object)x.gameObject).ToArray(); }
+                    if (GUILayout.Button("Set All to Baked")) FixLights();
+                    GUILayout.EndHorizontal();
+                    GUILayout.Space(10);
+                }
+
+                // Non-Static Objects (UPDATED TOGGLE UI)
+                if (_nonStaticObjects.Count > 0)
+                {
+                    string staticTooltip = "Objects that never move should be Static.\n\nMoving Objects (Pickups/Animators) are flagged below.";
+                    DrawTooltipHelpBox($"{safeToStaticCount} Static Candidates found.", staticTooltip, MessageType.Warning);
+                    if(ignoredCount > 0)
+                        GUILayout.Label($"({ignoredCount} objects excluded due to logic/animation)", EditorStyles.miniLabel);
+
+                    _nonStaticObjectsScrollPos = EditorGUILayout.BeginScrollView(_nonStaticObjectsScrollPos, GUILayout.Height(250));
+                    
+                    foreach (var entry in _nonStaticObjects)
+                    {
+                        if (entry.obj == null) continue;
+
+                        EditorGUILayout.BeginHorizontal(_listItemStyle);
+                        
+                        // NAME & REASON
+                        if (entry.IsSafeToStatic)
+                        {
+                            GUILayout.Label(entry.obj.name, GUILayout.Width(180));
+                        }
+                        else
+                        {
+                            GUI.enabled = false;
+                            GUILayout.Label($"{entry.obj.name}", _ignoredStyle, GUILayout.Width(180));
+                            GUILayout.Label($"[Logic: {entry.reason}]", EditorStyles.miniLabel, GUILayout.Width(100));
+                            GUI.enabled = true;
+                        }
+
+                        GUILayout.FlexibleSpace();
+
+                        // THE TOGGLE SWITCH
+                        if (entry.IsSafeToStatic)
+                        {
+                            bool isStatic = entry.obj.isStatic;
+                            string btnText = isStatic ? "STATIC" : "DYNAMIC";
+                            Color btnColor = isStatic ? Color.green : new Color(1f, 0.4f, 0.4f); // Green vs Soft Red
+                            
+                            GUI.backgroundColor = btnColor;
+                            if (GUILayout.Button(btnText, GUILayout.Width(80)))
+                            {
+                                Undo.RecordObject(entry.obj, "Toggle Static");
+                                entry.obj.isStatic = !entry.obj.isStatic;
+                                EditorUtility.SetDirty(entry.obj);
+                            }
+                            GUI.backgroundColor = Color.white;
+                        }
+                        else
+                        {
+                            // Locked for Unsafe objects
+                            GUI.enabled = false;
+                            GUILayout.Button("LOCKED", GUILayout.Width(80));
+                            GUI.enabled = true;
+                        }
+
+                        if (GUILayout.Button("Sel", GUILayout.Width(40))) Selection.activeGameObject = entry.obj;
+                        EditorGUILayout.EndHorizontal();
+                    }
+                    EditorGUILayout.EndScrollView();
+
+                    GUILayout.Space(5);
+                    GUILayout.BeginHorizontal();
+                    
+                    if (GUILayout.Button("Select Safe Candidates")) 
+                    { 
+                        Selection.objects = _nonStaticObjects.Where(x => x.IsSafeToStatic).Select(x => x.obj).ToArray(); 
+                    }
+                    
+                    // Only enable button if there are actually things to fix
+                    GUI.enabled = safeToStaticCount > 0;
+                    if (GUILayout.Button($"Set All Safe to Static")) FixStatic();
+                    GUI.enabled = true;
+                    
+                    GUILayout.EndHorizontal();
+                }
+                else if (_auditorClean && _occlusionSize > 0)
                 {
                     GUILayout.Label("All Systems Optimized.", _successStyle);
-                }
-                else
-                {
-                    // Realtime Lights
-                    if (_realtimeLights.Count > 0)
-                    {
-                        string lightTooltip = "Realtime lights calculate lighting/shadows every frame. This consumes significant GPU performance.\n\nBaking saves lighting into static textures (Lightmaps).";
-                        DrawTooltipHelpBox($"{_realtimeLights.Count} Realtime Lights Detected", lightTooltip, MessageType.Warning);
-
-                        _realtimeLightsScrollPos = EditorGUILayout.BeginScrollView(_realtimeLightsScrollPos, GUILayout.Height(100));
-                        for (int i = 0; i < _realtimeLights.Count; i++)
-                        {
-                            var l = _realtimeLights[i];
-                            if (l == null) continue;
-                            EditorGUILayout.BeginHorizontal(_listItemStyle);
-                            GUILayout.Label(l.name, GUILayout.Width(200));
-                            GUILayout.FlexibleSpace();
-                            if (GUILayout.Button("Sel", GUILayout.Width(40))) Selection.activeGameObject = l.gameObject;
-                            EditorGUILayout.EndHorizontal();
-                        }
-                        EditorGUILayout.EndScrollView();
-
-                        GUILayout.Space(5);
-                        GUILayout.BeginHorizontal();
-                        if (GUILayout.Button("Select All")) { Selection.objects = _realtimeLights.ConvertAll(x => (UnityEngine.Object)x.gameObject).ToArray(); }
-                        if (GUILayout.Button("Fix All: Set to Baked")) FixLights();
-                        GUILayout.EndHorizontal();
-                        GUILayout.Space(10);
-                    }
-
-                    // Non-Static Objects
-                    if (_nonStaticObjects.Count > 0)
-                    {
-                        string staticTooltip = "Objects that never move should be Static.\n\nThis enables:\n1. Baked Lighting\n2. Occlusion Culling\n3. Batching";
-                        DrawTooltipHelpBox($"{_nonStaticObjects.Count} Non-Static Meshes Detected", staticTooltip, MessageType.Warning);
-
-                        _nonStaticObjectsScrollPos = EditorGUILayout.BeginScrollView(_nonStaticObjectsScrollPos, GUILayout.Height(150));
-                        for (int i = 0; i < _nonStaticObjects.Count; i++)
-                        {
-                            var obj = _nonStaticObjects[i];
-                            if (obj == null) continue;
-                            EditorGUILayout.BeginHorizontal(_listItemStyle);
-                            GUILayout.Label(obj.name, GUILayout.Width(200));
-                            GUILayout.FlexibleSpace();
-                            if (GUILayout.Button("Sel", GUILayout.Width(40))) Selection.activeGameObject = obj;
-                            EditorGUILayout.EndHorizontal();
-                        }
-                        EditorGUILayout.EndScrollView();
-
-                        GUILayout.Space(5);
-                        GUILayout.BeginHorizontal();
-                        if (GUILayout.Button("Select All")) { Selection.objects = _nonStaticObjects.ToArray(); }
-                        if (GUILayout.Button("Fix All: Mark Static")) FixStatic();
-                        GUILayout.EndHorizontal();
-                    }
                 }
             }
             EditorGUILayout.EndVertical();
@@ -506,18 +554,9 @@ namespace StrangeToolkit
             GUILayout.Space(5);
 
             GUILayout.BeginHorizontal();
-            if (GUILayout.Toggle(_inspectorMode == InspectorMode.Meshes, "Geometry", "Button"))
-            {
-                if (_inspectorMode != InspectorMode.Meshes) _inspectorMode = InspectorMode.Meshes;
-            }
-            if (GUILayout.Toggle(_inspectorMode == InspectorMode.Textures, "Textures", "Button"))
-            {
-                if (_inspectorMode != InspectorMode.Textures) _inspectorMode = InspectorMode.Textures;
-            }
-            if (GUILayout.Toggle(_inspectorMode == InspectorMode.AudioMisc, "Audio & Misc", "Button"))
-            {
-                if (_inspectorMode != InspectorMode.AudioMisc) _inspectorMode = InspectorMode.AudioMisc;
-            }
+            if (GUILayout.Toggle(_inspectorMode == InspectorMode.Meshes, "Geometry", "Button")) _inspectorMode = InspectorMode.Meshes;
+            if (GUILayout.Toggle(_inspectorMode == InspectorMode.Textures, "Textures", "Button")) _inspectorMode = InspectorMode.Textures;
+            if (GUILayout.Toggle(_inspectorMode == InspectorMode.AudioMisc, "Audio & Misc", "Button")) _inspectorMode = InspectorMode.AudioMisc;
             GUILayout.EndHorizontal();
 
             if (GUILayout.Button("Analyze Assets", GUILayout.Height(25))) { AnalyzeSceneWeight(); GUIUtility.ExitGUI(); }
@@ -552,7 +591,6 @@ namespace StrangeToolkit
             GUILayout.Space(10);
             _mainScrollPos = EditorGUILayout.BeginScrollView(_mainScrollPos);
 
-            // Lighting
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             GUILayout.Space(5);
             GUILayout.Label("Lighting Tools", _subHeaderStyle);
@@ -598,7 +636,6 @@ namespace StrangeToolkit
 
             GUILayout.Space(15);
 
-            // Material Manager
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
             GUILayout.Space(5);
             GUILayout.Label("Material Manager", _subHeaderStyle);
@@ -702,64 +739,6 @@ namespace StrangeToolkit
         }
 
         // =========================================================
-        // EXPANSIONS
-        // =========================================================
-        private void DrawGameModeTab()
-        {
-            GUILayout.Label("Game Mode Expansion", _headerStyle);
-            GUILayout.Space(15);
-            if (_tGame == null)
-                DrawBetaMessage();
-            else
-                DrawInstalledModule(_tGame, "Strange_Game", "Game Mode");
-        }
-
-        private void DrawDJModeTab()
-        {
-            GUILayout.Label("DJ Mode Expansion", _headerStyle);
-            GUILayout.Space(15);
-            if (_tDJ == null)
-                DrawBetaMessage();
-            else
-                DrawInstalledModule(_tDJ, "Strange_DJ", "DJ Mode");
-        }
-
-        private void DrawInstalledModule(Type t, string goName, string prettyName)
-        {
-            var existing = FindObjectOfType(t);
-            if (existing != null)
-            {
-                EditorGUILayout.HelpBox($"{prettyName} is Installed & Active.", MessageType.Info);
-                if (GUILayout.Button($"Select {prettyName} Manager"))
-                    Selection.activeObject = existing;
-            }
-            else
-            {
-                EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-                GUILayout.Label($"{prettyName} Ready", _subHeaderStyle);
-                GUILayout.Label($"The script was found in your project.", EditorStyles.miniLabel);
-                GUILayout.Space(10);
-                if (GUILayout.Button($"INSTALL {prettyName.ToUpper()}", GUILayout.Height(40)))
-                {
-                    GameObject go = new GameObject(goName);
-                    go.AddComponent(t);
-                    Undo.RegisterCreatedObjectUndo(go, $"Install {prettyName}");
-                }
-                EditorGUILayout.EndVertical();
-            }
-        }
-
-        private void DrawBetaMessage()
-        {
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            GUILayout.Space(20);
-            GUILayout.Label("Module Not Found", _subHeaderStyle);
-            GUILayout.Label("In Beta - Message bellaisgod on Discord for more information", _warningStyle);
-            GUILayout.Space(20);
-            EditorGUILayout.EndVertical();
-        }
-
-        // =========================================================
         // HELPERS
         // =========================================================
         private void SimpleScan()
@@ -767,8 +746,6 @@ namespace StrangeToolkit
             _tVRC_LPPV = FindScriptType("VRCLightProbeProxyVolume");
             _tRedSim_LPPV = FindScriptType("LightVolume");
             _tBakery = FindScriptType("ftRenderLightmap");
-            _tDJ = FindScriptType("StrangeDJController");
-            _tGame = FindScriptType("StrangeGameManager");
             _scanComplete = true;
         }
 
@@ -809,11 +786,34 @@ namespace StrangeToolkit
             foreach (var r in allRenderers)
             {
                 if (!r.gameObject.isStatic)
-                    _nonStaticObjects.Add(r.gameObject);
+                {
+                    // SMART SCAN CHECK
+                    string exemptReason = CheckIfDynamic(r.gameObject);
+                    _nonStaticObjects.Add(new NonStaticEntry { 
+                        obj = r.gameObject, 
+                        reason = exemptReason 
+                    });
+                }
             }
 
             _occlusionSize = StaticOcclusionCulling.umbraDataSize;
-            _auditorClean = (_realtimeLights.Count == 0 && _nonStaticObjects.Count == 0 && _occlusionSize > 0);
+            
+            // Auditor is clean only if there are no lights AND no *fixable* static objects
+            bool noFixableObjects = !_nonStaticObjects.Any(x => x.IsSafeToStatic);
+            _auditorClean = (_realtimeLights.Count == 0 && noFixableObjects && _occlusionSize > 0);
+        }
+
+        private string CheckIfDynamic(GameObject go)
+        {
+            if (go.GetComponent<Animator>() != null) return "Has Animator";
+            if (go.GetComponent<Animation>() != null) return "Has Animation";
+            if (go.GetComponent<Rigidbody>() != null) return "Has Rigidbody";
+            
+            // String check avoids error if VRC SDK is missing
+            if (go.GetComponent("VRCPickup") != null || go.GetComponent("VRC.SDK3.Components.VRCPickup") != null) 
+                return "Is Pickup";
+
+            return null; // Is safe to fix
         }
 
         private void FixLights()
@@ -830,9 +830,14 @@ namespace StrangeToolkit
 
         private void FixStatic()
         {
-            GameObject[] objectsArray = _nonStaticObjects.ToArray();
-            Undo.RecordObjects(objectsArray, "Fix Static");
-            foreach (var go in objectsArray)
+            // Only fix objects that are SAFE to fix
+            var safeObjects = _nonStaticObjects
+                .Where(x => x.IsSafeToStatic)
+                .Select(x => x.obj)
+                .ToArray();
+
+            Undo.RecordObjects(safeObjects, "Fix Static");
+            foreach (var go in safeObjects)
             {
                 go.isStatic = true;
                 EditorUtility.SetDirty(go);
@@ -956,7 +961,6 @@ namespace StrangeToolkit
             int count = 0;
             HashSet<Material> processedMats = new HashSet<Material>();
 
-            // In whitelist mode, process listed materials first
             if (_useWhitelistMode)
             {
                 foreach (Material m in _blacklistMaterials)
@@ -1341,6 +1345,7 @@ namespace StrangeToolkit
 
                     EditorGUILayout.BeginHorizontal(_listItemStyle);
                     GUILayout.Label($"{i + 1}. {h.obj.name}", GUILayout.Width(200));
+                    // UPDATED: Now sorts and displays Disk Size correctly
                     GUILayout.Label($"Size: {EditorUtility.FormatBytes(h.diskSize)}");
                     if (GUILayout.Button("Sel", GUILayout.Width(40))) Selection.activeObject = h.obj;
                     EditorGUILayout.EndHorizontal();
@@ -1358,7 +1363,7 @@ namespace StrangeToolkit
             _totalVRAMBytes = 0;
             _totalDiskBytes = 0;
 
-            // Analyze meshes - group by unique mesh to avoid counting duplicates
+            // Analyze meshes - group by unique mesh
             var meshFilters = FindObjectsOfType<MeshFilter>().Where(m => m.sharedMesh != null);
             var uniqueMeshes = new Dictionary<Mesh, HeavyMesh>();
 
@@ -1378,7 +1383,7 @@ namespace StrangeToolkit
                     };
                 }
             }
-
+            // Sort Meshes by VRAM
             _heaviestMeshes = uniqueMeshes.Values.OrderByDescending(x => x.memSize).ToList();
 
             foreach (var m in _heaviestMeshes)
@@ -1413,7 +1418,6 @@ namespace StrangeToolkit
                 }
             }
 
-            // Include lightmaps
             if (LightmapSettings.lightmaps != null)
             {
                 foreach (var lm in LightmapSettings.lightmaps)
@@ -1424,6 +1428,7 @@ namespace StrangeToolkit
                 }
             }
 
+            // Sort Textures by VRAM
             _heaviestTextures = uniqueTextures
                 .Select(t =>
                 {
@@ -1453,7 +1458,8 @@ namespace StrangeToolkit
                     long disk = GetFileSize(c);
                     return new HeavyAsset { obj = c, memSize = vram, diskSize = disk };
                 })
-                .OrderByDescending(c => c.memSize)
+                // CHANGED: Audio is now sorted by Disk Size (heaviest first)
+                .OrderByDescending(c => c.diskSize)
                 .ToList();
 
             _registry.audio = audioClips;
@@ -1664,6 +1670,16 @@ namespace StrangeToolkit
                 {
                     alignment = TextAnchor.MiddleCenter,
                     normal = { textColor = new Color(0.6f, 0.8f, 1f) }
+                };
+            }
+            
+            // NEW STYLE FOR IGNORED OBJECTS
+            if (_ignoredStyle == null)
+            {
+                _ignoredStyle = new GUIStyle(EditorStyles.label)
+                {
+                    fontStyle = FontStyle.Italic,
+                    normal = { textColor = Color.gray }
                 };
             }
 

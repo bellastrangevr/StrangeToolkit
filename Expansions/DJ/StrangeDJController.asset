@@ -12,7 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c333ccfdd0cbdbc4ca30cef2dd6e6b9b, type: 3}
   m_Name: StrangeDJController
   m_EditorClassIdentifier: 
-  serializedUdonProgramAsset: {fileID: 11400000, guid: 3c6ee45f64513ff4b8af4106222cb013, type: 2}
+  serializedUdonProgramAsset: {fileID: 11400000, guid: 128d5c7676b4581438c127d2c7d4506e,
+    type: 2}
   udonAssembly: 
   assemblyError: 
   sourceCsScript: {fileID: 11500000, guid: e2d43e8f089448c44b7b12f3d8ad565c, type: 3}

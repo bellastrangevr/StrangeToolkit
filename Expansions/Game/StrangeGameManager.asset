@@ -12,7 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c333ccfdd0cbdbc4ca30cef2dd6e6b9b, type: 3}
   m_Name: StrangeGameManager
   m_EditorClassIdentifier: 
-  serializedUdonProgramAsset: {fileID: 11400000, guid: 4cb458e68d5b3d14c82752b82248140b, type: 2}
+  serializedUdonProgramAsset: {fileID: 11400000, guid: 2851d441a870b764cb9e49e4855918aa,
+    type: 2}
   udonAssembly: 
   assemblyError: 
   sourceCsScript: {fileID: 11500000, guid: 6c48226f84584ae47aa3d1712d943bb9, type: 3}
