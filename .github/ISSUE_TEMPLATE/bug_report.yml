@@ -1,0 +1,93 @@
+name: Bug Report
+description: Report a bug or issue with Strange Toolkit
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug!
+
+  - type: input
+    id: version
+    attributes:
+      label: Strange Toolkit Version
+      description: What version of Strange Toolkit are you using?
+      placeholder: "1.0.0"
+    validations:
+      required: true
+
+  - type: input
+    id: unity-version
+    attributes:
+      label: Unity Version
+      description: What version of Unity are you using?
+      placeholder: "2022.3.22f1"
+    validations:
+      required: true
+
+  - type: input
+    id: sdk-version
+    attributes:
+      label: VRChat SDK Version
+      description: What version of the VRChat Worlds SDK are you using?
+      placeholder: "3.9.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected Component
+      description: Which part of Strange Toolkit is affected?
+      options:
+        - Strange Hub
+        - Smart Toggle
+        - Atmosphere Switch
+        - Editor Dashboard
+        - World Tab
+        - Visuals Tab
+        - Interactables Tab
+        - Auditor Tab
+        - DJ Mode Expansion
+        - Game Mode Expansion
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: Describe what happened and what you expected to happen
+      placeholder: |
+        What happened:
+
+        What I expected:
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this issue?
+      placeholder: |
+        1. Open Strange Toolkit Dashboard
+        2. Go to '...'
+        3. Click on '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console Logs
+      description: Paste any relevant error messages from the Unity console
+      render: text
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other information that might help (screenshots, etc.)
