@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.2.0] - 2026-01-28
+
+### Added
+- **PhysBone Auditor** - Monitors VRCPhysBone performance metrics
+  - Component count, transform count, unique collider count
+  - Collision check calculation (bones × colliders per component)
+  - Color-coded warnings for high collision checks (yellow >64, red >128)
+  - Per-component breakdown sorted by performance impact
+- **StrangeToolkitLogger** - Reusable colored console logging utility
+  - Prefixed logs with `[Strange Toolkit]`
+  - Color-coded output: green (success), yellow (warning), red (error), cyan (action), magenta (detection)
+
+### Changed
+- **Avatar Components Auditor** renamed to **Missing Scripts Auditor**
+  - Now scans for any missing/broken script references (not just avatar components)
+  - PhysBones, PhysBone Colliders, and Contacts now supported in World SDK
+  - Removal buttons with colored console logging
+
 ## [1.1.0] - 2026-01-28
 
 ### Added
