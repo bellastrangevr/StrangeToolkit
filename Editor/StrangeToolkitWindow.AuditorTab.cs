@@ -198,9 +198,6 @@ namespace StrangeToolkit
                         GUILayout.EndHorizontal();
                     }
 
-                    // Draw the new granular tools (Audio, Particles, etc.)
-                    DrawExtendedAuditor();
-
                     if (_auditorClean && _occlusionSize > 0 && _nonStaticObjects.Count == 0 && _brokenStaticObjects.Count == 0)
                     {
                         GUILayout.Label("All Systems Optimized.", _successStyle);

@@ -15,6 +15,7 @@ namespace StrangeToolkit
         private class PostProcessIssue { public Component volume; public string reason; public bool isSelected = true; }
         private class ShaderIssue { public Material mat; public string reason; public bool isSelected = true; }
         private class TextureIssue { public Texture tex; public string reason; public bool isSelected = true; }
+        private class AvatarComponentIssue { public Component component; public string typeName; public bool isCritical; public bool isSelected = true; }
 
         private List<AudioIssue> _audioIssues = new List<AudioIssue>();
         private List<ParticleIssue> _particleIssues = new List<ParticleIssue>();
@@ -23,8 +24,9 @@ namespace StrangeToolkit
         private List<PostProcessIssue> _postProcessIssues = new List<PostProcessIssue>();
         private List<ShaderIssue> _shaderIssues = new List<ShaderIssue>();
         private List<TextureIssue> _textureIssues = new List<TextureIssue>();
+        private List<AvatarComponentIssue> _avatarComponentIssues = new List<AvatarComponentIssue>();
 
-        private Vector2 _audioScroll, _particleScroll, _physicsScroll, _shadowScroll, _postProcessScroll, _shaderScroll, _textureScroll;
+        private Vector2 _audioScroll, _particleScroll, _physicsScroll, _shadowScroll, _postProcessScroll, _shaderScroll, _textureScroll, _avatarComponentsScroll;
 
         // Foldout states
         private bool _showAudio = true;
@@ -34,6 +36,7 @@ namespace StrangeToolkit
         private bool _showPostProcessing = true;
         private bool _showShaders = true;
         private bool _showTextures = true;
+        private bool _showAvatarComponents = true;
 
         // --- ORCHESTRATION ---
         private void RunExtendedScan()
@@ -46,6 +49,7 @@ namespace StrangeToolkit
             _postProcessIssues.Clear();
             _shaderIssues.Clear();
             _textureIssues.Clear();
+            _avatarComponentIssues.Clear();
 
             // Run individual scans
             ScanAudio();
@@ -55,10 +59,12 @@ namespace StrangeToolkit
             ScanPostProcessing();
             ScanShaders();
             ScanTextureSettings();
+            ScanAvatarComponents();
         }
 
         private void DrawExtendedAuditor()
         {
+            DrawAvatarComponentsAuditor();
             DrawAudioAuditor();
             DrawParticleAuditor();
             DrawPhysicsAuditor();
