@@ -104,7 +104,7 @@ namespace StrangeToolkit
                     importer.SaveAndReimport();
                 }
             }
-            ScanTextureSettings();
+            RunExtendedScan();
         }
     }
 }

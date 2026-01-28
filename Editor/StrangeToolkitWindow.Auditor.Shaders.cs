@@ -83,7 +83,7 @@ namespace StrangeToolkit
             if (s == null) { Debug.LogError($"[StrangeToolkit] Shader not found: {shaderName}"); return; }
             Undo.RecordObjects(mats.ToArray(), "Swap Quest Shaders");
             foreach (var m in mats) { m.shader = s; EditorUtility.SetDirty(m); }
-            ScanShaders();
+            RunExtendedScan();
         }
     }
 }

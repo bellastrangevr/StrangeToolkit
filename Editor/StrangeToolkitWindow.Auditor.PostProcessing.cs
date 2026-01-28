@@ -85,7 +85,7 @@ namespace StrangeToolkit
             {
                 if (v != null) v.gameObject.SetActive(false); // Simple disable for now
             }
-            ScanPostProcessing();
+            RunExtendedScan();
         }
     }
 }
