@@ -10,7 +10,8 @@ namespace StrangeToolkit
     {
         private void ScanAvatarComponents()
         {
-            // 1. Avatar Descriptor (Critical - Blocks Upload)
+            // Only scan for Avatar Descriptors - they block world upload
+            // PhysBones, PhysBone Colliders, and Contacts are now supported in World SDK
             Type descriptorType = FindScriptType("VRCAvatarDescriptor") ?? Type.GetType("VRC.SDK3.Avatars.Components.VRCAvatarDescriptor, VRC.SDK3.Avatars");
             if (descriptorType != null)
             {
@@ -19,53 +20,68 @@ namespace StrangeToolkit
                 {
                     if (obj is Component c)
                     {
-                        _avatarComponentIssues.Add(new AvatarComponentIssue 
-                        { 
-                            component = c, 
-                            typeName = "Avatar Descriptor", 
-                            isCritical = true 
+                        _avatarComponentIssues.Add(new AvatarComponentIssue
+                        {
+                            component = c,
+                            typeName = "Avatar Descriptor",
+                            isCritical = true
                         });
                     }
                 }
+
+                // Auto-remove Avatar Descriptors and log to console
+                if (_avatarComponentIssues.Count > 0)
+                {
+                    AutoRemoveAvatarDescriptors();
+                }
+            }
+        }
+
+        private void AutoRemoveAvatarDescriptors()
+        {
+            var descriptorsToRemove = _avatarComponentIssues
+                .Where(x => x.component != null)
+                .ToList();
+
+            if (descriptorsToRemove.Count == 0) return;
+
+            // Log header
+            StrangeToolkitLogger.LogDetection(descriptorsToRemove.Count, "Avatar Descriptor(s)");
+
+            Undo.RecordObjects(descriptorsToRemove.Select(x => x.component.gameObject).ToArray(), "Auto-Remove Avatar Descriptors");
+
+            foreach (var issue in descriptorsToRemove)
+            {
+                string objectName = issue.component.gameObject.name;
+                string objectPath = GetGameObjectPath(issue.component.gameObject);
+
+                Undo.DestroyObjectImmediate(issue.component);
+
+                StrangeToolkitLogger.LogAction("Removed", "Avatar Descriptor", objectName, objectPath);
             }
 
-            // 2. PhysBones (Warning - Allowed but often leftover)
-            Type pbType = FindScriptType("VRCPhysBone") ?? Type.GetType("VRC.SDK3.Dynamics.PhysBone.Components.VRCPhysBone, VRC.SDK3.Dynamics.PhysBone");
-            if (pbType != null)
-            {
-                var pbs = FindObjectsOfType(pbType);
-                foreach (var obj in pbs)
-                {
-                    if (obj is Component c)
-                    {
-                        _avatarComponentIssues.Add(new AvatarComponentIssue 
-                        { 
-                            component = c, 
-                            typeName = "PhysBone", 
-                            isCritical = false 
-                        });
-                    }
-                }
-            }
+            // Log summary
+            StrangeToolkitLogger.LogSummary(
+                "removed",
+                descriptorsToRemove.Count,
+                "Avatar Descriptor(s)",
+                "Avatar Descriptors are for avatars only and will block world uploads."
+            );
 
-            // 3. PhysBone Colliders (Warning)
-            Type pbcType = FindScriptType("VRCPhysBoneCollider") ?? Type.GetType("VRC.SDK3.Dynamics.PhysBone.Components.VRCPhysBoneCollider, VRC.SDK3.Dynamics.PhysBone");
-            if (pbcType != null)
+            // Clear the issues list since we auto-removed them
+            _avatarComponentIssues.Clear();
+        }
+
+        private string GetGameObjectPath(GameObject obj)
+        {
+            string path = obj.name;
+            Transform parent = obj.transform.parent;
+            while (parent != null)
             {
-                var pbcs = FindObjectsOfType(pbcType);
-                foreach (var obj in pbcs)
-                {
-                    if (obj is Component c)
-                    {
-                        _avatarComponentIssues.Add(new AvatarComponentIssue 
-                        { 
-                            component = c, 
-                            typeName = "PhysBone Collider", 
-                            isCritical = false 
-                        });
-                    }
-                }
+                path = parent.name + "/" + path;
+                parent = parent.parent;
             }
+            return path;
         }
 
         private void DrawAvatarComponentsAuditor()
@@ -75,42 +91,41 @@ namespace StrangeToolkit
 
             if (_showAvatarComponents)
             {
+                // Avatar Descriptors are auto-removed, so this section just shows status
+                GUILayout.Space(5);
+
+                EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+                GUILayout.Label("Auto-Cleanup Status", EditorStyles.boldLabel);
+                GUILayout.Space(5);
+
+                // Info about what's checked
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.Label("Avatar Descriptors:", GUILayout.Width(140));
+                GUILayout.Label("Auto-removed (blocks upload)", _successStyle);
+                EditorGUILayout.EndHorizontal();
+
+                GUILayout.Space(5);
+
+                // Info about what's allowed
+                EditorGUILayout.HelpBox(
+                    "PhysBones, PhysBone Colliders, and Contacts are now supported in World SDK and are not flagged.",
+                    MessageType.Info);
+
+                EditorGUILayout.EndVertical();
+
+                // Show if any were found and removed this scan
                 if (_avatarComponentIssues.Count > 0)
                 {
-                    GUILayout.Space(10);
-                    int criticalCount = _avatarComponentIssues.Count(x => x.isCritical);
-                    
-                    if (criticalCount > 0)
-                        DrawTooltipHelpBox($"{criticalCount} Critical Avatar Components", "Avatar Descriptors will prevent World upload.", MessageType.Error);
-                    else
-                        DrawTooltipHelpBox($"{_avatarComponentIssues.Count} Avatar/PhysBone Components", "PhysBones are allowed in worlds but often left over from avatars.", MessageType.Warning);
-                    
-                    _avatarComponentsScroll = EditorGUILayout.BeginScrollView(_avatarComponentsScroll, GUILayout.Height(Mathf.Min(150, _avatarComponentIssues.Count * 25 + 10)));
-                    foreach (var issue in _avatarComponentIssues)
-                    {
-                        if (issue.component == null) continue;
-                        EditorGUILayout.BeginHorizontal(_listItemStyle);
-                        issue.isSelected = EditorGUILayout.Toggle(issue.isSelected, GUILayout.Width(20));
-                        GUILayout.Label(issue.component.gameObject.name, EditorStyles.boldLabel, GUILayout.Width(180));
-                        
-                        GUIStyle typeStyle = issue.isCritical ? _questDangerStyle : EditorStyles.miniLabel;
-                        GUILayout.Label(issue.typeName, typeStyle);
-                        
-                        GUILayout.FlexibleSpace();
-                        if (GUILayout.Button("Sel", GUILayout.Width(40))) Selection.activeGameObject = issue.component.gameObject;
-                        EditorGUILayout.EndHorizontal();
-                    }
-                    EditorGUILayout.EndScrollView();
-
                     GUILayout.Space(5);
-                    if (GUILayout.Button("Remove Checked Components"))
-                    {
-                        RemoveAvatarComponents(_avatarComponentIssues.Where(x => x.isSelected).Select(x => x.component).ToList());
-                    }
+                    DrawTooltipHelpBox(
+                        $"{_avatarComponentIssues.Count} Avatar Descriptor(s) found",
+                        "These will be auto-removed. Check the Console for details.",
+                        MessageType.Warning);
                 }
                 else
                 {
-                    GUILayout.Label("No avatar components found.", _successStyle);
+                    GUILayout.Space(5);
+                    GUILayout.Label("No avatar descriptors in scene.", _successStyle);
                 }
             }
             EditorGUILayout.EndVertical();
@@ -118,15 +133,21 @@ namespace StrangeToolkit
 
         private void RemoveAvatarComponents(List<Component> components)
         {
+            // Kept for backwards compatibility, but auto-removal handles this now
             if (components == null || components.Count == 0) return;
 
             Undo.RecordObjects(components.Select(c => c.gameObject).ToArray(), "Remove Avatar Components");
-            
+
             foreach (var c in components)
             {
-                if (c != null) Undo.DestroyObjectImmediate(c);
+                if (c != null)
+                {
+                    string objectName = c.gameObject.name;
+                    Undo.DestroyObjectImmediate(c);
+                    StrangeToolkitLogger.LogSuccess($"Manually removed component from \"{objectName}\"");
+                }
             }
-            
+
             RunExtendedScan();
         }
     }
