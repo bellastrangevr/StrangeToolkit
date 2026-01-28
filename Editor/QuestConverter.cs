@@ -172,5 +172,54 @@ namespace StrangeToolkit
 
             EditorUtility.DisplayDialog("Success", "Quest Conversion Complete!\n\nYou are now in the Quest scene. All materials have been cloned to the 'StrangeToolkit_Generated' folder.", "OK");
         }
+
+        // ==================================================================================
+        // SYNC TRANSFORMS
+        // ==================================================================================
+        private struct TransformData { public Vector3 pos; public Quaternion rot; public Vector3 scale; }
+
+        public static void SyncTransformsFromPC()
+        {
+            var questScene = SceneManager.GetActiveScene();
+            if (!questScene.name.EndsWith("_Quest")) { EditorUtility.DisplayDialog("Error", "Not in a Quest scene.", "OK"); return; }
+
+            string pcPath = questScene.path.Replace("_Quest.unity", ".unity");
+            if (!File.Exists(pcPath)) { EditorUtility.DisplayDialog("Error", "Could not find matching PC scene.", "OK"); return; }
+
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+
+            // 1. Open PC Scene
+            var pcScene = EditorSceneManager.OpenScene(pcPath, OpenSceneMode.Single);
+            Dictionary<string, TransformData> cache = new Dictionary<string, TransformData>();
+            foreach (GameObject root in pcScene.GetRootGameObjects())
+                TraverseAndCache(root.transform, "", cache);
+
+            // 2. Re-open Quest Scene
+            var reopenedQuest = EditorSceneManager.OpenScene(questScene.path, OpenSceneMode.Single);
+            foreach (GameObject root in reopenedQuest.GetRootGameObjects())
+                ApplyCache(root.transform, "", cache);
+
+            EditorSceneManager.MarkSceneDirty(reopenedQuest);
+            EditorUtility.DisplayDialog("Sync Complete", "Transforms synced from PC scene.", "OK");
+        }
+
+        private static void TraverseAndCache(Transform t, string path, Dictionary<string, TransformData> cache)
+        {
+            string myPath = path + "/" + t.name;
+            cache[myPath] = new TransformData { pos = t.localPosition, rot = t.localRotation, scale = t.localScale };
+            foreach (Transform child in t) TraverseAndCache(child, myPath, cache);
+        }
+
+        private static void ApplyCache(Transform t, string path, Dictionary<string, TransformData> cache)
+        {
+            string myPath = path + "/" + t.name;
+            if (cache.TryGetValue(myPath, out TransformData data))
+            {
+                t.localPosition = data.pos;
+                t.localRotation = data.rot;
+                t.localScale = data.scale;
+            }
+            foreach (Transform child in t) ApplyCache(child, myPath, cache);
+        }
     }
 }

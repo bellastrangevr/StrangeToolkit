@@ -220,6 +220,15 @@ namespace StrangeToolkit
                 };
                 _blacklistButtonStyle.normal.textColor = new Color(1f, 0.5f, 0.5f);
             }
+
+            if (_foldoutStyle == null)
+            {
+                _foldoutStyle = new GUIStyle(EditorStyles.foldout)
+                {
+                    fontStyle = FontStyle.Bold,
+                    fontSize = 12
+                };
+            }
         }
 
         private void DrawHorizontalLine()

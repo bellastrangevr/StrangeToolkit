@@ -49,9 +49,13 @@ namespace StrangeToolkit
         private enum InspectorMode { Meshes, Textures, AudioMisc }
         private InspectorMode _inspectorMode = InspectorMode.Meshes;
 
+        private enum AuditProfile { PC, Quest }
+        private AuditProfile _auditProfile = AuditProfile.PC;
+
         private GUIStyle _headerStyle, _subHeaderStyle, _warningStyle, _successStyle, _listItemStyle, _bigDropStyle, _cardStyle;
         private GUIStyle _questSafeStyle, _questWarnStyle, _questDangerStyle, _infoStyle, _ignoredStyle;
         private GUIStyle _whitelistButtonStyle, _blacklistButtonStyle;
+        private GUIStyle _foldoutStyle;
 
         private bool _scanComplete = false;
         private Type _tVRC_LPPV, _tRedSim_LPPV, _tBakery;
@@ -104,6 +108,7 @@ namespace StrangeToolkit
         [SerializeField] private List<BlacklistEntry> _blacklistObjects = new List<BlacklistEntry>();
         [SerializeField] private List<Material> _blacklistMaterials = new List<Material>();
 
+        // Expansions data
         private class ExpansionInfo
         {
             public ExpansionConfig config;
@@ -111,6 +116,7 @@ namespace StrangeToolkit
         }
         private List<ExpansionInfo> _expansions = new List<ExpansionInfo>();
         private Vector2 _expansionsScrollPos;
+
 
         [MenuItem("Strange Toolkit/Open Dashboard")]
         public static void ShowWindow() => GetWindow<StrangeToolkitWindow>("Strange Hub");

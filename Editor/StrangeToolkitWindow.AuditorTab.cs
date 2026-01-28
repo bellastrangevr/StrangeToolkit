@@ -8,189 +8,203 @@ namespace StrangeToolkit
 {
     public partial class StrangeToolkitWindow
     {
+        private bool _showPerformanceScan = true;
+        private bool _showWeightInspector = true;
+
         private void DrawAuditorTab()
         {
             GUILayout.Label("World Auditor", _headerStyle);
             GUILayout.Space(10);
 
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Audit Target:", EditorStyles.boldLabel, GUILayout.Width(90));
+            _auditProfile = (AuditProfile)EditorGUILayout.EnumPopup(_auditProfile);
+            GUILayout.EndHorizontal();
+            GUILayout.Space(5);
+
             _mainScrollPos = EditorGUILayout.BeginScrollView(_mainScrollPos);
 
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            GUILayout.Space(5);
-            GUILayout.Label("Performance Scan", _subHeaderStyle);
-            GUILayout.Space(5);
+            _showPerformanceScan = EditorGUILayout.Foldout(_showPerformanceScan, "Performance Scan", true, _foldoutStyle);
 
-            if (GUILayout.Button("Run Scan", GUILayout.Height(30))) { RunAuditorScan(); RunExtendedScan(); GUIUtility.ExitGUI(); }
-
-            if (_auditorHasRun)
+            if (_showPerformanceScan)
             {
-                if (_occlusionSize > 0)
-                {
-                    string successMsg = $"Occlusion Culling Baked! ({EditorUtility.FormatBytes(_occlusionSize)})";
-                    string successTip = "Great job! Occlusion data is present.\n\nIMPORTANT: If you have moved ANY static objects since the last bake, you MUST re-bake now.";
-                    DrawTooltipHelpBox(successMsg, successTip, MessageType.Info);
-                    if (GUILayout.Button("Re-Bake (Open Window)")) EditorApplication.ExecuteMenuItem("Window/Rendering/Occlusion Culling");
-                }
-                else
-                {
-                    string occlusionTooltip = "Occlusion Culling stops the GPU from rendering objects hidden behind walls. It is the single most effective optimization for VRChat worlds.";
-                    DrawTooltipHelpBox("Occlusion Data Missing!", occlusionTooltip, MessageType.Error);
-                    if (GUILayout.Button("Open Occlusion Culling Window", GUILayout.Height(25))) EditorApplication.ExecuteMenuItem("Window/Rendering/Occlusion Culling");
-                }
-                GUILayout.Space(10);
+                GUILayout.Space(5);
+                if (GUILayout.Button("Run Scan", GUILayout.Height(30))) { RunAuditorScan(); RunExtendedScan(); GUIUtility.ExitGUI(); }
 
-                int safeToStaticCount = _nonStaticObjects.Count(x => x.IsSafeToStatic);
-                int ignoredCount = _nonStaticObjects.Count - safeToStaticCount;
-
-                // Realtime Lights
-                if (_realtimeLights.Count > 0)
+                if (_auditorHasRun)
                 {
-                    string lightTooltip = "Realtime lights calculate lighting/shadows every frame. This consumes significant GPU performance.\n\nBaking saves lighting into static textures (Lightmaps).";
-                    DrawTooltipHelpBox($"{_realtimeLights.Count} Realtime Lights Detected", lightTooltip, MessageType.Warning);
-
-                    _realtimeLightsScrollPos = EditorGUILayout.BeginScrollView(_realtimeLightsScrollPos, GUILayout.Height(100));
-                    for (int i = 0; i < _realtimeLights.Count; i++)
+                    if (_occlusionSize > 0)
                     {
-                        var l = _realtimeLights[i];
-                        if (l == null) continue;
-                        EditorGUILayout.BeginHorizontal(_listItemStyle);
-                        GUILayout.Label(l.name, GUILayout.Width(200));
-                        GUILayout.FlexibleSpace();
-                        if (GUILayout.Button("Sel", GUILayout.Width(40))) Selection.activeGameObject = l.gameObject;
-                        EditorGUILayout.EndHorizontal();
+                        string successMsg = $"Occlusion Culling Baked! ({EditorUtility.FormatBytes(_occlusionSize)})";
+                        string successTip = "Great job! Occlusion data is present.\n\nIMPORTANT: If you have moved ANY static objects since the last bake, you MUST re-bake now.";
+                        DrawTooltipHelpBox(successMsg, successTip, MessageType.Info);
+                        if (GUILayout.Button("Re-Bake (Open Window)")) EditorApplication.ExecuteMenuItem("Window/Rendering/Occlusion Culling");
                     }
-                    EditorGUILayout.EndScrollView();
-
-                    GUILayout.Space(5);
-                    GUILayout.BeginHorizontal();
-                    if (GUILayout.Button("Select All")) { Selection.objects = _realtimeLights.ConvertAll(x => (UnityEngine.Object)x.gameObject).ToArray(); }
-                    if (GUILayout.Button("Set All to Baked")) FixLights();
-                    GUILayout.EndHorizontal();
-                    GUILayout.Space(10);
-                }
-
-                if (_nonStaticObjects.Count > 0)
-                {
-                    string staticTooltip = "Objects that never move should be Static.\n\nMoving Objects (Pickups/Animators) are flagged below.";
-                    DrawTooltipHelpBox($"{safeToStaticCount} Static Candidates found.", staticTooltip, MessageType.Warning);
-                    if(ignoredCount > 0)
-                        GUILayout.Label($"({ignoredCount} objects excluded due to logic/animation)", EditorStyles.miniLabel);
-
-                    _nonStaticObjectsScrollPos = EditorGUILayout.BeginScrollView(_nonStaticObjectsScrollPos, GUILayout.Height(250));
-
-                    foreach (var entry in _nonStaticObjects)
+                    else
                     {
-                        if (entry.obj == null) continue;
+                        string occlusionTooltip = "Occlusion Culling stops the GPU from rendering objects hidden behind walls. It is the single most effective optimization for VRChat worlds.";
+                        DrawTooltipHelpBox("Occlusion Data Missing!", occlusionTooltip, MessageType.Error);
+                        if (GUILayout.Button("Open Occlusion Culling Window", GUILayout.Height(25))) EditorApplication.ExecuteMenuItem("Window/Rendering/Occlusion Culling");
+                    }
+                    GUILayout.Space(10);
 
-                        EditorGUILayout.BeginHorizontal(_listItemStyle);
+                    int safeToStaticCount = _nonStaticObjects.Count(x => x.IsSafeToStatic);
+                    int ignoredCount = _nonStaticObjects.Count - safeToStaticCount;
 
-                        if (entry.IsSafeToStatic)
+                    // Realtime Lights
+                    if (_realtimeLights.Count > 0)
+                    {
+                        string lightTooltip = _auditProfile == AuditProfile.Quest ? "Realtime lights are extremely expensive on Quest. Bake them!" : "Realtime lights calculate lighting/shadows every frame. Baking is recommended.";
+                        DrawTooltipHelpBox($"{_realtimeLights.Count} Realtime Lights Detected", lightTooltip, MessageType.Warning);
+
+                        _realtimeLightsScrollPos = EditorGUILayout.BeginScrollView(_realtimeLightsScrollPos, GUILayout.Height(100));
+                        for (int i = 0; i < _realtimeLights.Count; i++)
                         {
-                            GUILayout.Label(entry.obj.name, GUILayout.Width(180));
+                            var l = _realtimeLights[i];
+                            if (l == null) continue;
+                            EditorGUILayout.BeginHorizontal(_listItemStyle);
+                            GUILayout.Label(l.name, GUILayout.Width(200));
+                            GUILayout.FlexibleSpace();
+                            if (GUILayout.Button("Sel", GUILayout.Width(40))) Selection.activeGameObject = l.gameObject;
+                            EditorGUILayout.EndHorizontal();
                         }
-                        else
+                        EditorGUILayout.EndScrollView();
+
+                        GUILayout.Space(5);
+                        GUILayout.BeginHorizontal();
+                        if (GUILayout.Button("Select All")) { Selection.objects = _realtimeLights.ConvertAll(x => (UnityEngine.Object)x.gameObject).ToArray(); }
+                        if (GUILayout.Button("Set All to Baked")) FixLights();
+                        GUILayout.EndHorizontal();
+                        GUILayout.Space(10);
+                    }
+
+                    if (_nonStaticObjects.Count > 0)
+                    {
+                        string staticTooltip = "Objects that never move should be Static.\n\nMoving Objects (Pickups/Animators) are flagged below.";
+                        DrawTooltipHelpBox($"{safeToStaticCount} Static Candidates found.", staticTooltip, MessageType.Warning);
+                        if(ignoredCount > 0)
+                            GUILayout.Label($"({ignoredCount} objects excluded due to logic/animation)", EditorStyles.miniLabel);
+
+                        _nonStaticObjectsScrollPos = EditorGUILayout.BeginScrollView(_nonStaticObjectsScrollPos, GUILayout.Height(250));
+
+                        foreach (var entry in _nonStaticObjects)
                         {
-                            GUI.enabled = false;
-                            GUILayout.Label($"{entry.obj.name}", _ignoredStyle, GUILayout.Width(180));
-                            GUILayout.Label($"[Logic: {entry.reason}]", EditorStyles.miniLabel, GUILayout.Width(100));
-                            GUI.enabled = true;
-                        }
+                            if (entry.obj == null) continue;
 
-                        GUILayout.FlexibleSpace();
+                            EditorGUILayout.BeginHorizontal(_listItemStyle);
 
-                        if (entry.IsSafeToStatic)
-                        {
-                            bool isStatic = entry.obj.isStatic;
-                            string btnText = isStatic ? "STATIC" : "DYNAMIC";
-                            Color btnColor = isStatic ? Color.green : new Color(1f, 0.4f, 0.4f);
-
-                            GUI.backgroundColor = btnColor;
-                            if (GUILayout.Button(btnText, GUILayout.Width(80)))
+                            if (entry.IsSafeToStatic)
                             {
-                                Undo.RecordObject(entry.obj, "Toggle Static");
-                                entry.obj.isStatic = !entry.obj.isStatic;
+                                GUILayout.Label(entry.obj.name, GUILayout.Width(180));
+                            }
+                            else
+                            {
+                                GUI.enabled = false;
+                                GUILayout.Label($"{entry.obj.name}", _ignoredStyle, GUILayout.Width(180));
+                                GUILayout.Label($"[Logic: {entry.reason}]", EditorStyles.miniLabel, GUILayout.Width(100));
+                                GUI.enabled = true;
+                            }
+
+                            GUILayout.FlexibleSpace();
+
+                            if (entry.IsSafeToStatic)
+                            {
+                                bool isStatic = entry.obj.isStatic;
+                                string btnText = isStatic ? "STATIC" : "DYNAMIC";
+                                Color btnColor = isStatic ? Color.green : new Color(1f, 0.4f, 0.4f);
+
+                                GUI.backgroundColor = btnColor;
+                                if (GUILayout.Button(btnText, GUILayout.Width(80)))
+                                {
+                                    Undo.RecordObject(entry.obj, "Toggle Static");
+                                    entry.obj.isStatic = !entry.obj.isStatic;
+                                    EditorUtility.SetDirty(entry.obj);
+                                }
+                                GUI.backgroundColor = Color.white;
+                            }
+                            else
+                            {
+                                GUI.enabled = false;
+                                GUILayout.Button("LOCKED", GUILayout.Width(80));
+                                GUI.enabled = true;
+                            }
+
+                            if (GUILayout.Button("Sel", GUILayout.Width(40))) Selection.activeGameObject = entry.obj;
+                            EditorGUILayout.EndHorizontal();
+                        }
+                        EditorGUILayout.EndScrollView();
+
+                        GUILayout.Space(5);
+                        GUILayout.BeginHorizontal();
+
+                        if (GUILayout.Button("Select Safe Candidates"))
+                        {
+                            Selection.objects = _nonStaticObjects.Where(x => x.IsSafeToStatic).Select(x => x.obj).ToArray();
+                        }
+
+                        GUI.enabled = safeToStaticCount > 0;
+                        if (GUILayout.Button($"Set All Safe to Static")) FixStatic();
+                        GUI.enabled = true;
+
+                        GUILayout.EndHorizontal();
+                    }
+
+                    // Broken static objects (static but shouldn't be)
+                    if (_brokenStaticObjects.Count > 0)
+                    {
+                        GUILayout.Space(10);
+                        string brokenTooltip = "These objects are set to Static but have components that require movement (Rigidbody, Pickup, etc.).\n\nThis will cause broken behavior in-game!";
+                        DrawTooltipHelpBox($"{_brokenStaticObjects.Count} BROKEN Static Objects!", brokenTooltip, MessageType.Error);
+
+                        _brokenStaticScrollPos = EditorGUILayout.BeginScrollView(_brokenStaticScrollPos, GUILayout.Height(150));
+
+                        foreach (var entry in _brokenStaticObjects)
+                        {
+                            if (entry.obj == null) continue;
+
+                            EditorGUILayout.BeginHorizontal(_listItemStyle);
+
+                            GUILayout.Label(entry.obj.name, EditorStyles.boldLabel, GUILayout.Width(180));
+                            GUILayout.Label($"[{entry.reason}]", EditorStyles.miniLabel, GUILayout.Width(150));
+
+                            GUILayout.FlexibleSpace();
+
+                            GUI.backgroundColor = new Color(1f, 0.6f, 0.3f);
+                            if (GUILayout.Button("Fix", GUILayout.Width(50)))
+                            {
+                                Undo.RecordObject(entry.obj, "Fix Broken Static");
+                                entry.obj.isStatic = false;
                                 EditorUtility.SetDirty(entry.obj);
+                                RunAuditorScan();
+                                GUIUtility.ExitGUI();
                             }
                             GUI.backgroundColor = Color.white;
+
+                            if (GUILayout.Button("Sel", GUILayout.Width(40))) Selection.activeGameObject = entry.obj;
+                            EditorGUILayout.EndHorizontal();
                         }
-                        else
+                        EditorGUILayout.EndScrollView();
+
+                        GUILayout.Space(5);
+                        GUILayout.BeginHorizontal();
+                        if (GUILayout.Button("Select All Broken"))
                         {
-                            GUI.enabled = false;
-                            GUILayout.Button("LOCKED", GUILayout.Width(80));
-                            GUI.enabled = true;
+                            Selection.objects = _brokenStaticObjects.Select(x => x.obj).Cast<UnityEngine.Object>().ToArray();
                         }
-
-                        if (GUILayout.Button("Sel", GUILayout.Width(40))) Selection.activeGameObject = entry.obj;
-                        EditorGUILayout.EndHorizontal();
-                    }
-                    EditorGUILayout.EndScrollView();
-
-                    GUILayout.Space(5);
-                    GUILayout.BeginHorizontal();
-
-                    if (GUILayout.Button("Select Safe Candidates"))
-                    {
-                        Selection.objects = _nonStaticObjects.Where(x => x.IsSafeToStatic).Select(x => x.obj).ToArray();
-                    }
-
-                    GUI.enabled = safeToStaticCount > 0;
-                    if (GUILayout.Button($"Set All Safe to Static")) FixStatic();
-                    GUI.enabled = true;
-
-                    GUILayout.EndHorizontal();
-                }
-
-                // Broken static objects (static but shouldn't be)
-                if (_brokenStaticObjects.Count > 0)
-                {
-                    GUILayout.Space(10);
-                    string brokenTooltip = "These objects are set to Static but have components that require movement (Rigidbody, Pickup, etc.).\n\nThis will cause broken behavior in-game!";
-                    DrawTooltipHelpBox($"{_brokenStaticObjects.Count} BROKEN Static Objects!", brokenTooltip, MessageType.Error);
-
-                    _brokenStaticScrollPos = EditorGUILayout.BeginScrollView(_brokenStaticScrollPos, GUILayout.Height(150));
-
-                    foreach (var entry in _brokenStaticObjects)
-                    {
-                        if (entry.obj == null) continue;
-
-                        EditorGUILayout.BeginHorizontal(_listItemStyle);
-
-                        GUILayout.Label(entry.obj.name, EditorStyles.boldLabel, GUILayout.Width(180));
-                        GUILayout.Label($"[{entry.reason}]", EditorStyles.miniLabel, GUILayout.Width(150));
-
-                        GUILayout.FlexibleSpace();
-
                         GUI.backgroundColor = new Color(1f, 0.6f, 0.3f);
-                        if (GUILayout.Button("Fix", GUILayout.Width(50)))
-                        {
-                            Undo.RecordObject(entry.obj, "Fix Broken Static");
-                            entry.obj.isStatic = false;
-                            EditorUtility.SetDirty(entry.obj);
-                            RunAuditorScan();
-                            GUIUtility.ExitGUI();
-                        }
+                        if (GUILayout.Button("Fix All (Set to Dynamic)")) FixBrokenStatic();
                         GUI.backgroundColor = Color.white;
-
-                        if (GUILayout.Button("Sel", GUILayout.Width(40))) Selection.activeGameObject = entry.obj;
-                        EditorGUILayout.EndHorizontal();
+                        GUILayout.EndHorizontal();
                     }
-                    EditorGUILayout.EndScrollView();
 
-                    GUILayout.Space(5);
-                    GUILayout.BeginHorizontal();
-                    if (GUILayout.Button("Select All Broken"))
+                    // Draw the new granular tools (Audio, Particles, etc.)
+                    DrawExtendedAuditor();
+
+                    if (_auditorClean && _occlusionSize > 0 && _nonStaticObjects.Count == 0 && _brokenStaticObjects.Count == 0)
                     {
-                        Selection.objects = _brokenStaticObjects.Select(x => x.obj).Cast<UnityEngine.Object>().ToArray();
+                        GUILayout.Label("All Systems Optimized.", _successStyle);
                     }
-                    GUI.backgroundColor = new Color(1f, 0.6f, 0.3f);
-                    if (GUILayout.Button("Fix All (Set to Dynamic)")) FixBrokenStatic();
-                    GUI.backgroundColor = Color.white;
-                    GUILayout.EndHorizontal();
-                }
-
-                if (_auditorClean && _occlusionSize > 0 && _nonStaticObjects.Count == 0 && _brokenStaticObjects.Count == 0)
-                {
-                    GUILayout.Label("All Systems Optimized.", _successStyle);
                 }
             }
             EditorGUILayout.EndVertical();
@@ -198,52 +212,54 @@ namespace StrangeToolkit
             GUILayout.Space(15);
 
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            GUILayout.Space(5);
-            GUILayout.Label("Scene Weight Inspector", _subHeaderStyle);
-            GUILayout.Space(5);
+            _showWeightInspector = EditorGUILayout.Foldout(_showWeightInspector, "Scene Weight Inspector", true, _foldoutStyle);
 
-            GUILayout.BeginHorizontal();
-            if (GUILayout.Toggle(_inspectorMode == InspectorMode.Meshes, "Geometry", "Button")) _inspectorMode = InspectorMode.Meshes;
-            if (GUILayout.Toggle(_inspectorMode == InspectorMode.Textures, "Textures", "Button")) _inspectorMode = InspectorMode.Textures;
-            if (GUILayout.Toggle(_inspectorMode == InspectorMode.AudioMisc, "Audio & Misc", "Button")) _inspectorMode = InspectorMode.AudioMisc;
-            GUILayout.EndHorizontal();
-
-            if (GUILayout.Button("Analyze Assets", GUILayout.Height(25))) { AnalyzeSceneWeight(); GUIUtility.ExitGUI(); }
-
-            if (_weightScanRun)
+            if (_showWeightInspector)
             {
-                EditorGUILayout.BeginHorizontal();
-                if (_usingBuildData)
-                {
-                    GUI.color = new Color(0.5f, 1f, 0.5f);
-                    GUILayout.Label("Using Build Log Data", EditorStyles.miniLabel);
-                    if (!string.IsNullOrEmpty(_buildDataSize))
-                        GUILayout.Label($"(Compressed: {_buildDataSize})", EditorStyles.miniLabel);
-                    GUI.color = Color.white;
-                }
-                else
-                {
-                    GUI.color = new Color(1f, 0.8f, 0.5f);
-                    GUILayout.Label("Using Estimation (Build world for accurate data)", EditorStyles.miniLabel);
-                    GUI.color = Color.white;
-                }
-                GUILayout.FlexibleSpace();
-                EditorGUILayout.EndHorizontal();
-            }
+                GUILayout.Space(5);
+                GUILayout.BeginHorizontal();
+                if (GUILayout.Toggle(_inspectorMode == InspectorMode.Meshes, "Geometry", "Button")) _inspectorMode = InspectorMode.Meshes;
+                if (GUILayout.Toggle(_inspectorMode == InspectorMode.Textures, "Textures", "Button")) _inspectorMode = InspectorMode.Textures;
+                if (GUILayout.Toggle(_inspectorMode == InspectorMode.AudioMisc, "Audio & Misc", "Button")) _inspectorMode = InspectorMode.AudioMisc;
+                GUILayout.EndHorizontal();
 
-            if (_weightScanRun)
-            {
-                _auditorScrollPos = EditorGUILayout.BeginScrollView(_auditorScrollPos, GUILayout.Height(250));
-                if (_inspectorMode == InspectorMode.Meshes) DrawMeshInspector();
-                else if (_inspectorMode == InspectorMode.Textures) DrawTextureInspector();
-                else if (_inspectorMode == InspectorMode.AudioMisc) DrawAudioMiscInspector();
-                EditorGUILayout.EndScrollView();
+                if (GUILayout.Button("Analyze Assets", GUILayout.Height(25))) { AnalyzeSceneWeight(); GUIUtility.ExitGUI(); }
+
+                if (_weightScanRun)
+                {
+                    EditorGUILayout.BeginHorizontal();
+                    if (_usingBuildData)
+                    {
+                        GUI.color = new Color(0.5f, 1f, 0.5f);
+                        GUILayout.Label("Using Build Log Data", EditorStyles.miniLabel);
+                        if (!string.IsNullOrEmpty(_buildDataSize))
+                            GUILayout.Label($"(Compressed: {_buildDataSize})", EditorStyles.miniLabel);
+                        GUI.color = Color.white;
+                    }
+                    else
+                    {
+                        GUI.color = new Color(1f, 0.8f, 0.5f);
+                        GUILayout.Label("Using Estimation (Build world for accurate data)", EditorStyles.miniLabel);
+                        GUI.color = Color.white;
+                    }
+                    GUILayout.FlexibleSpace();
+                    EditorGUILayout.EndHorizontal();
+                }
+
+                if (_weightScanRun)
+                {
+                    _auditorScrollPos = EditorGUILayout.BeginScrollView(_auditorScrollPos, GUILayout.Height(250));
+                    if (_inspectorMode == InspectorMode.Meshes) DrawMeshInspector();
+                    else if (_inspectorMode == InspectorMode.Textures) DrawTextureInspector();
+                    else if (_inspectorMode == InspectorMode.AudioMisc) DrawAudioMiscInspector();
+                    EditorGUILayout.EndScrollView();
+                }
             }
             EditorGUILayout.EndVertical();
 
             GUILayout.Space(15);
 
-            if (_weightScanRun)
+            if (_weightScanRun && _auditProfile == AuditProfile.Quest)
             {
                 DrawQuestEstimator();
             }
@@ -306,6 +322,7 @@ namespace StrangeToolkit
             _occlusionSize = StaticOcclusionCulling.umbraDataSize;
             bool noFixableObjects = !_nonStaticObjects.Any(x => x.IsSafeToStatic);
             _auditorClean = (_realtimeLights.Count == 0 && noFixableObjects && _brokenStaticObjects.Count == 0 && _occlusionSize > 0);
+            RunExtendedScan();
         }
 
         private string CheckIfDynamic(GameObject go)

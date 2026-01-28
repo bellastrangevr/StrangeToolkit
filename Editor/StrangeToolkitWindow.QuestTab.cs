@@ -89,87 +89,16 @@ namespace StrangeToolkit
                 GUILayout.Space(15);
             }
 
-            // --- SHADER AUDIT ---
-            var nonMobile = QuestConverter.GetNonMobileMaterials();
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            GUILayout.Label($"Shader Audit ({nonMobile.Count} Issues)", _subHeaderStyle);
-
-            if (nonMobile.Count > 0)
-            {
-                EditorGUILayout.HelpBox($"{nonMobile.Count} materials are using PC shaders (Standard, Poiyomi, etc.).\nThese may crash Quest or run poorly.", MessageType.Warning);
-
-                if (GUILayout.Button("Swap All to 'VRChat/Mobile/Toon Lit'"))
-                    QuestConverter.SwapShaders(nonMobile, "VRChat/Mobile/Toon Lit");
-
-                if (GUILayout.Button("Swap All to 'VRChat/Mobile/Standard Lite'"))
-                    QuestConverter.SwapShaders(nonMobile, "VRChat/Mobile/Standard Lite");
-            }
-            else
-            {
-                GUILayout.Label("All materials using Mobile-friendly shaders.", _successStyle);
-            }
-            EditorGUILayout.EndVertical();
-
-            GUILayout.Space(15);
-
-            // --- ADDITIONAL OPTIMIZATIONS ---
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            GUILayout.Label("Deep Optimization Tools", _subHeaderStyle);
-            GUILayout.Space(5);
-
-            // Audio
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Audio:", GUILayout.Width(60));
-            if (GUILayout.Button("Optimize All Audio (Force Mono + Android Settings)"))
-                QuestConverter.OptimizeAudio();
-            GUILayout.EndHorizontal();
-
-            // Particles
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Particles:", GUILayout.Width(60));
-            if (GUILayout.Button("Reduce Count by 50%")) QuestConverter.ScaleParticles(0.5f);
-            if (GUILayout.Button("Disable Transparent")) QuestConverter.DisableTransparentParticles();
-            GUILayout.EndHorizontal();
-
-            // Physics & Shadows
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Physics:", GUILayout.Width(60));
-            if (GUILayout.Button("Optimize Rigidbodies")) QuestConverter.OptimizeRigidbodies();
-            if (GUILayout.Button("Remove Small Shadows")) QuestConverter.OptimizeShadowCasters();
-            GUILayout.EndHorizontal();
-
-            // Post Processing
-            if (GUILayout.Button("Remove All Post-Processing (Recommended for Quest)"))
-                QuestConverter.RemovePostProcessing();
-
-            GUILayout.Space(10);
-            DrawHorizontalLine();
-            GUILayout.Space(10);
-
             if (GUILayout.Button("🔄 Sync Transforms from PC Scene", GUILayout.Height(30)))
                 QuestConverter.SyncTransformsFromPC();
-            
-            EditorGUILayout.EndVertical();
 
-            GUILayout.Space(15);
-
-            // --- TEXTURE AUDIT ---
-            var heavyTex = QuestConverter.GetTexturesMissingAndroidOverrides();
-            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-            GUILayout.Label($"Texture Audit ({heavyTex.Count} Issues)", _subHeaderStyle);
-
-            if (heavyTex.Count > 0)
+            GUILayout.Space(10);
+            if (GUILayout.Button("Open Auditor to Optimize", GUILayout.Height(40)))
             {
-                EditorGUILayout.HelpBox($"{heavyTex.Count} textures missing Android compression overrides.\nThis will cause massive VRAM usage and crashes.", MessageType.Warning);
-
-                if (GUILayout.Button("Auto-Compress All (ASTC 6x6)"))
-                    QuestConverter.ApplyAndroidOverrides(heavyTex);
+                _currentTab = ToolkitTab.Auditor;
+                _auditProfile = AuditProfile.Quest;
+                RunAuditorScan();
             }
-            else
-            {
-                GUILayout.Label("All textures have Android overrides.", _successStyle);
-            }
-            EditorGUILayout.EndVertical();
         }
     }
 }

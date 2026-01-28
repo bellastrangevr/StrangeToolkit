@@ -21,13 +21,22 @@ namespace StrangeToolkit
                 if (importer != null)
                 {
                     List<string> reasons = new List<string>();
-                    if (!importer.forceToMono) reasons.Add("Stereo (2x RAM)");
                     
                     var settings = importer.defaultSampleSettings;
-                    if (src.clip.length > 10f && settings.loadType == AudioClipLoadType.DecompressOnLoad)
-                        reasons.Add("Large file DecompressOnLoad");
-                    if (settings.compressionFormat == AudioCompressionFormat.PCM && src.clip.length > 2f)
-                        reasons.Add("Uncompressed PCM");
+
+                    if (_auditProfile == AuditProfile.Quest)
+                    {
+                        if (!importer.forceToMono) reasons.Add("Stereo (2x RAM)");
+                        if (settings.compressionFormat != AudioCompressionFormat.ADPCM && settings.compressionFormat != AudioCompressionFormat.Vorbis)
+                            reasons.Add("Not Compressed (ADPCM/Vorbis)");
+                    }
+                    else // PC
+                    {
+                        if (src.clip.length > 10f && settings.loadType == AudioClipLoadType.DecompressOnLoad)
+                            reasons.Add("Large file DecompressOnLoad");
+                        if (settings.compressionFormat == AudioCompressionFormat.PCM && src.clip.length > 2f)
+                            reasons.Add("Uncompressed PCM");
+                    }
 
                     if (reasons.Count > 0)
                     {
@@ -51,51 +60,63 @@ namespace StrangeToolkit
 
         private void DrawAudioAuditor()
         {
-            if (_audioIssues.Count > 0)
-            {
-                GUILayout.Space(10);
-                long totalSavings = _audioIssues.Sum(x => x.potentialSavings);
-                string savingsText = EditorUtility.FormatBytes(totalSavings);
-                
-                DrawTooltipHelpBox($"{_audioIssues.Count} Audio Candidates (Save ~{savingsText})", "Optimizing these clips could save significant RAM.", MessageType.Info);
-                _audioScroll = EditorGUILayout.BeginScrollView(_audioScroll, GUILayout.Height(Mathf.Min(150, _audioIssues.Count * 25 + 10)));
-                foreach (var issue in _audioIssues)
-                {
-                    EditorGUILayout.BeginHorizontal(_listItemStyle);
-                    GUILayout.Label(issue.clip.name, EditorStyles.boldLabel, GUILayout.Width(180));
-                    GUILayout.Label(issue.reason, EditorStyles.miniLabel);
-                    GUILayout.FlexibleSpace();
-                    if (GUILayout.Button("Sel", GUILayout.Width(40))) Selection.activeObject = issue.clip;
-                    EditorGUILayout.EndHorizontal();
-                }
-                EditorGUILayout.EndScrollView();
-                
-                GUILayout.Space(5);
-                
-                // Optimization Tools Foldout
-                EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-                GUILayout.Label("Optimization Tools", EditorStyles.boldLabel);
-                
-                GUILayout.BeginHorizontal();
-                if (GUILayout.Button("Optimize Selected"))
-                {
-                    var selected = Selection.objects.OfType<AudioClip>().ToList();
-                    if (selected.Count > 0) OptimizeAudioClips(selected);
-                }
-                
-                if (GUILayout.Button("Optimize All Listed"))
-                {
-                    OptimizeAudioClips(_audioIssues.Select(x => x.clip).ToList());
-                }
-                GUILayout.EndHorizontal();
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+            _showAudio = EditorGUILayout.Foldout(_showAudio, "Audio Audit", true, _foldoutStyle);
 
-                GUILayout.Space(5);
-                GUI.backgroundColor = new Color(1f, 0.6f, 0.6f);
-                if (GUILayout.Button("Undo Last Audio Action")) Undo.PerformUndo();
-                GUI.backgroundColor = Color.white;
-                
-                EditorGUILayout.EndVertical();
+            if (_showAudio)
+            {
+                if (_audioIssues.Count > 0)
+                {
+                    GUILayout.Space(10);
+                    long totalSavings = _audioIssues.Sum(x => x.potentialSavings);
+                    string savingsText = EditorUtility.FormatBytes(totalSavings);
+                    
+                    DrawTooltipHelpBox($"{_audioIssues.Count} Audio Candidates (Save ~{savingsText})", "Optimizing these clips could save significant RAM.", MessageType.Info);
+                    _audioScroll = EditorGUILayout.BeginScrollView(_audioScroll, GUILayout.Height(Mathf.Min(150, _audioIssues.Count * 25 + 10)));
+                    foreach (var issue in _audioIssues)
+                    {
+                        EditorGUILayout.BeginHorizontal(_listItemStyle);
+                        issue.isSelected = EditorGUILayout.Toggle(issue.isSelected, GUILayout.Width(20));
+                        GUILayout.Label(issue.clip.name, EditorStyles.boldLabel, GUILayout.Width(180));
+                        GUILayout.Label(issue.reason, EditorStyles.miniLabel);
+                        GUILayout.FlexibleSpace();
+                        if (GUILayout.Button("Sel", GUILayout.Width(40))) Selection.activeObject = issue.clip;
+                        EditorGUILayout.EndHorizontal();
+                    }
+                    EditorGUILayout.EndScrollView();
+                    
+                    GUILayout.Space(5);
+                    
+                    // Optimization Tools Foldout
+                    EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+                    GUILayout.Label("Optimization Tools", EditorStyles.boldLabel);
+                    
+                    GUILayout.BeginHorizontal();
+                    if (GUILayout.Button("Optimize Checked"))
+                    {
+                        var checkedClips = _audioIssues.Where(x => x.isSelected).Select(x => x.clip).ToList();
+                        if (checkedClips.Count > 0) OptimizeAudioClips(checkedClips);
+                    }
+                    
+                    if (GUILayout.Button("Optimize All Listed"))
+                    {
+                        OptimizeAudioClips(_audioIssues.Select(x => x.clip).ToList());
+                    }
+                    GUILayout.EndHorizontal();
+
+                    GUILayout.Space(5);
+                    GUI.backgroundColor = new Color(1f, 0.6f, 0.6f);
+                    if (GUILayout.Button("Undo Last Audio Action")) Undo.PerformUndo();
+                    GUI.backgroundColor = Color.white;
+                    
+                    EditorGUILayout.EndVertical();
+                }
+                else
+                {
+                    GUILayout.Label($"Audio settings look good for {_auditProfile}.", _successStyle);
+                }
             }
+            EditorGUILayout.EndVertical();
         }
 
         private void OptimizeAudioClips(List<AudioClip> clips)
