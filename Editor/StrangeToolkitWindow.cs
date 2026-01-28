@@ -43,7 +43,7 @@ namespace StrangeToolkit
 
     public partial class StrangeToolkitWindow : EditorWindow
     {
-        private enum ToolkitTab { World, Visuals, Interactables, Auditor, Expansions }
+        private enum ToolkitTab { World, Visuals, Interactables, Auditor, Quest, Expansions }
         private ToolkitTab _currentTab = ToolkitTab.World;
 
         private enum InspectorMode { Meshes, Textures, AudioMisc }
@@ -180,6 +180,7 @@ namespace StrangeToolkit
                 case ToolkitTab.Visuals: DrawVisualsTab(); break;
                 case ToolkitTab.Interactables: DrawInteractablesTab(); break;
                 case ToolkitTab.Auditor: DrawAuditorTab(); break;
+                case ToolkitTab.Quest: DrawQuestTab(); break;
                 case ToolkitTab.Expansions: DrawExpansionsTab(); break;
             }
 
@@ -198,6 +199,7 @@ namespace StrangeToolkit
             DrawTabButton("Visuals", ToolkitTab.Visuals);
             DrawTabButton("Interactables", ToolkitTab.Interactables);
             DrawTabButton("Auditor", ToolkitTab.Auditor);
+            DrawTabButton("Quest", ToolkitTab.Quest);
 
             GUILayout.Space(20);
             DrawTabButton("Expansions", ToolkitTab.Expansions);
