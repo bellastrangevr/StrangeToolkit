@@ -1,5 +1,8 @@
 RELEASE_INSTRUCTIONS.md
 
+# Wiki (separate repo)
+wiki/
+
 # Expansion packs (user content)
 Expansions/*
 !Expansions/StrangeToolkit.Expansions.asmdef
