@@ -62,16 +62,19 @@ namespace StrangeToolkit
 
         private void ReduceParticleCounts(List<ParticleSystem> systems, float factor)
         {
-            Undo.RecordObjects(systems.ConvertAll(x => (Object)x).ToArray(), "Reduce Particle Counts");
-            
-            foreach (var ps in systems)
+            var validSystems = systems.Where(x => x != null).ToList();
+            if (validSystems.Count == 0) return;
+
+            Undo.RecordObjects(validSystems.ConvertAll(x => (Object)x).ToArray(), "Reduce Particle Counts");
+
+            foreach (var ps in validSystems)
             {
                 var main = ps.main;
                 main.maxParticles = Mathf.Max(1, Mathf.FloorToInt(main.maxParticles * factor));
                 var emission = ps.emission;
                 emission.rateOverTimeMultiplier *= factor;
             }
-            ScanParticles();
+            RunExtendedScan(); // Use orchestrator to properly clear and rescan
         }
     }
 }

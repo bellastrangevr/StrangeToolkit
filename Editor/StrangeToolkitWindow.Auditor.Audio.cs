@@ -122,7 +122,7 @@ namespace StrangeToolkit
                 }
             }
             
-            ScanAudio(); // Refresh list
+            RunExtendedScan(); // Use orchestrator to properly clear and rescan
             Debug.Log($"[StrangeToolkit] Optimized {clips.Count} audio clips.");
         }
     }

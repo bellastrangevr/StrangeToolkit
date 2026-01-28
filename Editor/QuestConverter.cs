@@ -108,8 +108,7 @@ namespace StrangeToolkit
                     }
                     usedNames.Add(uniqueName);
 
-                    string newPath = $"{targetFolder}/{matName}";
-                    newPath = $"{targetFolder}/{uniqueName}";
+                    string newPath = $"{targetFolder}/{uniqueName}";
 
                     if (AssetDatabase.CopyAsset(originalPath, newPath))
                     {

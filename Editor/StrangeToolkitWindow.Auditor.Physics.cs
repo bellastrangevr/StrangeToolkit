@@ -59,13 +59,16 @@ namespace StrangeToolkit
         private void FixNonConvexColliders()
         {
             List<MeshCollider> colliders = _physicsIssues
+                .Where(i => i.obj != null)
                 .Select(i => i.obj.GetComponent<MeshCollider>())
                 .Where(c => c != null && !c.convex).ToList();
 
+            if (colliders.Count == 0) return;
+
             Undo.RecordObjects(colliders.ToArray(), "Make Colliders Convex");
             foreach (var mc in colliders) mc.convex = true;
-            
-            ScanPhysics();
+
+            RunExtendedScan(); // Use orchestrator to properly clear and rescan
         }
     }
 }

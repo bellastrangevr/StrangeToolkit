@@ -252,7 +252,7 @@ namespace StrangeToolkit
                     if (c.gameObject.GetComponents<Component>().Length <= 2) // Transform + Volume
                         c.gameObject.SetActive(false);
                     else
-                        Object.DestroyImmediate(c);
+                        Undo.DestroyObjectImmediate(c);
                 }
             }
         }

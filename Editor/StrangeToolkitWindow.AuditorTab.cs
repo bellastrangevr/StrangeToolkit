@@ -20,7 +20,7 @@ namespace StrangeToolkit
             GUILayout.Label("Performance Scan", _subHeaderStyle);
             GUILayout.Space(5);
 
-            if (GUILayout.Button("Run Scan", GUILayout.Height(30))) { RunAuditorScan(); GUIUtility.ExitGUI(); }
+            if (GUILayout.Button("Run Scan", GUILayout.Height(30))) { RunAuditorScan(); RunExtendedScan(); GUIUtility.ExitGUI(); }
 
             if (_auditorHasRun)
             {
@@ -246,6 +246,18 @@ namespace StrangeToolkit
             if (_weightScanRun)
             {
                 DrawQuestEstimator();
+            }
+
+            // Extended Auditor (Audio, Particles, Physics, Shadows, Post-Processing)
+            if (_auditorHasRun)
+            {
+                GUILayout.Space(15);
+                EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+                GUILayout.Space(5);
+                GUILayout.Label("Extended Auditor", _subHeaderStyle);
+                GUILayout.Space(5);
+                DrawExtendedAuditor();
+                EditorGUILayout.EndVertical();
             }
 
             EditorGUILayout.EndScrollView();
