@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.3.0] - 2026-01-29
+
+### Added
+- **Avatar Components Auditor**
+  - Restored auditor to scan for leftover `VRCAvatarDescriptor` and `PipelineManager` components
+  - Added one-click removal for these components
+
+### Fixed
+- **Visuals Tab**
+  - Fixed obsolete `Lightmapping` API calls for Unity 2022+ compatibility
+  - Fixed `LightingSettings` null reference exceptions
+  - Fixed Bakery window integration
+  - Fixed "Go to Auditor Tab" button functionality
+- **Quest Converter**
+  - Fixed transform synchronization for objects with duplicate names using a Queue-based matching system
+- **General**
+  - Resolved duplicate method definitions in `StrangeToolkitWindow`
+
 ## [1.2.0] - 2026-01-28
 
 ### Added

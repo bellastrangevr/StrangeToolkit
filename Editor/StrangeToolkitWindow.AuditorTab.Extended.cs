@@ -15,6 +15,8 @@ namespace StrangeToolkit
         private class ShaderIssue { public Material mat; public string reason; public bool isSelected = true; }
         private class TextureIssue { public Texture tex; public string reason; public bool isSelected = true; }
         private class MissingScriptIssue { public GameObject gameObject; public bool isSelected = true; }
+        private class AvatarComponentIssue { public Component component; public string reason; public bool isSelected = true; }
+
 
         private List<AudioIssue> _audioIssues = new List<AudioIssue>();
         private List<ParticleIssue> _particleIssues = new List<ParticleIssue>();
@@ -24,8 +26,10 @@ namespace StrangeToolkit
         private List<ShaderIssue> _shaderIssues = new List<ShaderIssue>();
         private List<TextureIssue> _textureIssues = new List<TextureIssue>();
         private List<MissingScriptIssue> _missingScriptIssues = new List<MissingScriptIssue>();
+        private List<InstancingIssue> _instancingIssues = new List<InstancingIssue>();
+        private List<AvatarComponentIssue> _avatarComponentIssues = new List<AvatarComponentIssue>();
 
-        private Vector2 _audioScroll, _particleScroll, _physicsScroll, _shadowScroll, _postProcessScroll, _shaderScroll, _textureScroll, _missingScriptsScroll;
+        private Vector2 _audioScroll, _particleScroll, _physicsScroll, _shadowScroll, _postProcessScroll, _shaderScroll, _textureScroll, _missingScriptsScroll, _instancingScroll, _avatarComponentsScroll;
 
         // Foldout states
         private bool _showAudio = true;
@@ -36,6 +40,8 @@ namespace StrangeToolkit
         private bool _showShaders = true;
         private bool _showTextures = true;
         private bool _showMissingScripts = true;
+        private bool _showGpuInstancing = true;
+        private bool _showAvatarComponents = true;
 
         // --- ORCHESTRATION ---
         private void RunExtendedScan()
@@ -49,6 +55,8 @@ namespace StrangeToolkit
             _shaderIssues.Clear();
             _textureIssues.Clear();
             _missingScriptIssues.Clear();
+            _instancingIssues.Clear();
+            _avatarComponentIssues.Clear();
 
             // Run individual scans
             ScanAudio();
@@ -60,10 +68,13 @@ namespace StrangeToolkit
             ScanTextureSettings();
             ScanMissingScripts();
             ScanPhysBones();
+            ScanGpuInstancing();
+            ScanAvatarComponents();
         }
 
         private void DrawExtendedAuditor()
         {
+            DrawGpuInstancingAuditor();
             DrawPhysBoneAuditor();
             DrawMissingScriptsAuditor();
             DrawAudioAuditor();
@@ -73,6 +84,7 @@ namespace StrangeToolkit
             DrawPostProcessingAuditor();
             DrawShaderAuditor();
             DrawTextureSettingsAuditor();
+            DrawAvatarComponentsAuditor();
         }
     }
 }

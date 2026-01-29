@@ -2,6 +2,8 @@ using UnityEngine;
 using UnityEditor;
 using System;
 using System.IO;
+using System.Linq;
+using System.Reflection;
 
 namespace StrangeToolkit
 {
@@ -236,6 +238,93 @@ namespace StrangeToolkit
             Rect rect = EditorGUILayout.GetControlRect(false, 1);
             rect.height = 1;
             EditorGUI.DrawRect(rect, new Color(0.5f, 0.5f, 0.5f, 1));
+        }
+
+        private void AutoGenerateSceneVolumes(float maxVolumeSize)
+        {
+            var renderers = FindObjectsOfType<MeshRenderer>()
+                .Where(r => (GameObjectUtility.GetStaticEditorFlags(r.gameObject) & StaticEditorFlags.LightmapStatic) != 0)
+                .ToList();
+
+            if (renderers.Count == 0)
+            {
+                EditorUtility.DisplayDialog("Scene Volume Generation", "No lightmap-static MeshRenderers found in the scene. There's nothing to build the volume around.", "OK");
+                return;
+            }
+
+            var bounds = new Bounds(renderers[0].bounds.center, Vector3.zero);
+            foreach (var rend in renderers)
+            {
+                bounds.Encapsulate(rend.bounds);
+            }
+
+            if (bounds.size.x > maxVolumeSize || bounds.size.y > maxVolumeSize || bounds.size.z > maxVolumeSize)
+            {
+                bool proceed = EditorUtility.DisplayDialog("Large Scene Volume",
+                    $"The calculated bounding volume is very large ({bounds.size.x:F1} x {bounds.size.y:F1} x {bounds.size.z:F1}m). " +
+                    $"This may lead to long bake times and high memory usage.\n\n" +
+                    $"It's recommended to keep volumes under {maxVolumeSize}m on any given axis. Consider splitting your scene into smaller, more manageable areas.\n\n" +
+                    $"Do you want to proceed anyway?",
+                    "Proceed Anyway", "Cancel");
+                if (!proceed) return;
+            }
+
+            Type lppvType = _tRedSim_LPPV ?? _tVRC_LPPV;
+            if (lppvType == null)
+            {
+                EditorUtility.DisplayDialog("LPPV Component Not Found", "Could not find a Light Probe Proxy Volume component (RedSim or VRC). Make sure your project has a valid VRCSDK or RedSim LPPV installed.", "OK");
+                return;
+            }
+
+            GameObject lppvGo = GameObject.Find("Scene_Global_LPPV");
+            if (lppvGo == null)
+            {
+                lppvGo = new GameObject("Scene_Global_LPPV");
+                Undo.RegisterCreatedObjectUndo(lppvGo, "Create Scene LPPV");
+            }
+            else
+            {
+                Undo.RecordObject(lppvGo.transform, "Update Scene LPPV Transform");
+            }
+
+            Component lppvComponent = lppvGo.GetComponent(lppvType);
+            if (lppvComponent == null)
+            {
+                lppvComponent = Undo.AddComponent(lppvGo, lppvType);
+            }
+
+            Undo.RecordObject(lppvComponent, "Update LPPV Settings");
+
+            if (lppvType == _tVRC_LPPV)
+            {
+                lppvGo.transform.position = bounds.center;
+                PropertyInfo sizeProp = lppvType.GetProperty("ProxyVolumeSize");
+                if (sizeProp != null && sizeProp.CanWrite)
+                {
+                    sizeProp.SetValue(lppvComponent, bounds.size);
+                }
+                else
+                {
+                    Debug.LogWarning("[StrangeToolkit] Could not find writable 'ProxyVolumeSize' property on VRC LPPV component.");
+                }
+            }
+            else if (lppvType == _tRedSim_LPPV)
+            {
+                PropertyInfo centerProp = lppvType.GetProperty("center");
+                if (centerProp != null && centerProp.CanWrite) centerProp.SetValue(lppvComponent, bounds.center);
+
+                PropertyInfo extentsProp = lppvType.GetProperty("extents");
+                if (extentsProp != null && extentsProp.CanWrite) extentsProp.SetValue(lppvComponent, bounds.size);
+            }
+
+            if (FindObjectOfType<LightProbeGroup>() == null)
+            {
+                Undo.AddComponent<LightProbeGroup>(lppvGo);
+                Debug.Log("[StrangeToolkit] No LightProbeGroup found in scene. Added one to LPPV object.");
+            }
+            
+            Selection.activeGameObject = lppvGo;
+            Debug.Log($"[StrangeToolkit] Successfully configured 'Scene_Global_LPPV' with {lppvType.Name} to encompass all {renderers.Count} static renderers.");
         }
     }
 }

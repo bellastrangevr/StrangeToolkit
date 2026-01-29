@@ -99,6 +99,8 @@ namespace StrangeToolkit
 
         private long _totalVRAMBytes = 0;
 
+        private LightingPreset _lightingPreset;
+        private float _maxVolumeSize = 250f;
         private Vector2 _mainScrollPos, _auditorScrollPos, _blacklistScrollPos;
         private string[] _sortedShaderNames;
         private int _selectedShaderIndex = 0;
@@ -107,6 +109,11 @@ namespace StrangeToolkit
         [SerializeField] private bool _useWhitelistMode = false;
         [SerializeField] private List<BlacklistEntry> _blacklistObjects = new List<BlacklistEntry>();
         [SerializeField] private List<Material> _blacklistMaterials = new List<Material>();
+
+        // Material Consolidator state
+        private InstancingIssue _selectedConsolidationIssue;
+        private int _selectedMasterMaterialIndex = 0;
+        private InstancingIssue _selectedConversionIssue;
 
         // Expansions data
         private class ExpansionInfo

@@ -190,36 +190,47 @@ namespace StrangeToolkit
 
             // 1. Open PC Scene
             var pcScene = EditorSceneManager.OpenScene(pcPath, OpenSceneMode.Single);
-            Dictionary<string, TransformData> cache = new Dictionary<string, TransformData>();
+            Dictionary<string, Queue<TransformData>> cache = new Dictionary<string, Queue<TransformData>>();
             foreach (GameObject root in pcScene.GetRootGameObjects())
                 TraverseAndCache(root.transform, "", cache);
 
             // 2. Re-open Quest Scene
             var reopenedQuest = EditorSceneManager.OpenScene(questScene.path, OpenSceneMode.Single);
+            int updatedCount = 0;
             foreach (GameObject root in reopenedQuest.GetRootGameObjects())
-                ApplyCache(root.transform, "", cache);
+                ApplyCache(root.transform, "", cache, ref updatedCount);
 
             EditorSceneManager.MarkSceneDirty(reopenedQuest);
-            EditorUtility.DisplayDialog("Sync Complete", "Transforms synced from PC scene.", "OK");
+            EditorUtility.DisplayDialog("Sync Complete", $"Transforms synced for {updatedCount} objects from PC scene.", "OK");
         }
 
-        private static void TraverseAndCache(Transform t, string path, Dictionary<string, TransformData> cache)
+        private static void TraverseAndCache(Transform t, string path, Dictionary<string, Queue<TransformData>> cache)
         {
             string myPath = path + "/" + t.name;
-            cache[myPath] = new TransformData { pos = t.localPosition, rot = t.localRotation, scale = t.localScale };
+            
+            if (!cache.ContainsKey(myPath))
+                cache[myPath] = new Queue<TransformData>();
+            
+            cache[myPath].Enqueue(new TransformData { pos = t.localPosition, rot = t.localRotation, scale = t.localScale });
+            
             foreach (Transform child in t) TraverseAndCache(child, myPath, cache);
         }
 
-        private static void ApplyCache(Transform t, string path, Dictionary<string, TransformData> cache)
+        private static void ApplyCache(Transform t, string path, Dictionary<string, Queue<TransformData>> cache, ref int count)
         {
             string myPath = path + "/" + t.name;
-            if (cache.TryGetValue(myPath, out TransformData data))
+            if (cache.TryGetValue(myPath, out Queue<TransformData> queue) && queue.Count > 0)
             {
-                t.localPosition = data.pos;
-                t.localRotation = data.rot;
-                t.localScale = data.scale;
+                TransformData data = queue.Dequeue();
+                if (t.localPosition != data.pos || t.localRotation != data.rot || t.localScale != data.scale)
+                {
+                    t.localPosition = data.pos;
+                    t.localRotation = data.rot;
+                    t.localScale = data.scale;
+                    count++;
+                }
             }
-            foreach (Transform child in t) ApplyCache(child, myPath, cache);
+            foreach (Transform child in t) ApplyCache(child, myPath, cache, ref count);
         }
     }
 }
