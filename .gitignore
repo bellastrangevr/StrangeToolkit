@@ -7,3 +7,5 @@ wiki/
 Expansions/*
 !Expansions/StrangeToolkit.Expansions.asmdef
 !Expansions/StrangeToolkit.Expansions.asmdef.meta
+!Expansions/StrangeToolkit.Expansions_UdonSharpAssemblyDefinition.asset
+!Expansions/StrangeToolkit.Expansions_UdonSharpAssemblyDefinition.asset.meta

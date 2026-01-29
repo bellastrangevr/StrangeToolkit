@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1] - 2026-01-30
+
+### Fixed
+- Fixed UdonSharp assembly definitions not being recognized in VPM packages
+  - Added missing UdonSharp references to asmdef files
+  - Added UdonSharpAssemblyDefinition assets for Scripts and Expansions folders
+
 ## [1.2.0] - 2026-01-28
 
 ### Added
