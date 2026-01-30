@@ -15,6 +15,7 @@
                         'vrc-dark': '#1a1a2e',
                         'vrc-darker': '#0f0f1a',
                         'discord': '#5865F2',
+                        'patreon': '#FF424D',
                     }
                 }
             }
@@ -24,12 +25,15 @@
 <body class="bg-vrc-darker text-gray-100 min-h-screen">
     <!-- Header -->
     <header class="bg-vrc-dark border-b border-gray-800">
-        <div class="max-w-6xl mx-auto px-4 py-6">
+        <div class="max-w-6xl mx-auto px-4 py-4">
             <div class="flex items-center justify-between">
-                <h1 class="text-3xl font-bold bg-gradient-to-r from-vrc-blue to-purple-500 bg-clip-text text-transparent">
+                <h1 class="text-2xl font-bold bg-gradient-to-r from-vrc-blue to-purple-500 bg-clip-text text-transparent">
                     Strange Toolkit
                 </h1>
                 <div class="flex gap-4">
+                    <a href="https://www.patreon.com/bellastrangevr" target="_blank" class="text-gray-400 hover:text-patreon transition-colors">
+                        <i class="fab fa-patreon text-2xl"></i>
+                    </a>
                     <a href="https://discord.gg/ZV5nK5vNFP" target="_blank" class="text-gray-400 hover:text-discord transition-colors">
                         <i class="fab fa-discord text-2xl"></i>
                     </a>
@@ -44,6 +48,7 @@
     <!-- Hero Section -->
     <section class="py-16 px-4">
         <div class="max-w-4xl mx-auto text-center">
+            <img src="logo.png" alt="Strange Toolkit Logo" class="mx-auto mb-8 max-h-48">
             <p class="text-xl text-gray-300 mb-8">
                 A Unity editor toolkit for VRChat world creators. Atmosphere presets, smart toggles with persistence, world auditing, and optimization tools.
             </p>
@@ -79,40 +84,13 @@
             <h2 class="text-2xl font-bold text-center mb-12">Features</h2>
 
             <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <!-- Strange Hub -->
-                <div class="bg-vrc-darker rounded-xl p-6 border border-gray-800 hover:border-vrc-blue/50 transition-colors">
-                    <div class="w-12 h-12 bg-vrc-blue/20 rounded-lg flex items-center justify-center mb-4">
-                        <i class="fas fa-cube text-vrc-blue text-xl"></i>
-                    </div>
-                    <h3 class="text-lg font-semibold mb-2">Strange Hub</h3>
-                    <p class="text-gray-400 text-sm">Central manager for atmosphere presets, toggle persistence, and object cleanup tracking.</p>
-                </div>
-
-                <!-- Smart Toggles -->
-                <div class="bg-vrc-darker rounded-xl p-6 border border-gray-800 hover:border-vrc-blue/50 transition-colors">
-                    <div class="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center mb-4">
-                        <i class="fas fa-toggle-on text-purple-500 text-xl"></i>
-                    </div>
-                    <h3 class="text-lg font-semibold mb-2">Smart Toggles</h3>
-                    <p class="text-gray-400 text-sm">Interactive toggles with GameObject control, animator parameters, material emission, and audio feedback.</p>
-                </div>
-
-                <!-- Atmosphere Presets -->
-                <div class="bg-vrc-darker rounded-xl p-6 border border-gray-800 hover:border-vrc-blue/50 transition-colors">
-                    <div class="w-12 h-12 bg-orange-500/20 rounded-lg flex items-center justify-center mb-4">
-                        <i class="fas fa-sun text-orange-500 text-xl"></i>
-                    </div>
-                    <h3 class="text-lg font-semibold mb-2">Atmosphere Presets</h3>
-                    <p class="text-gray-400 text-sm">Define multiple skybox, fog, and lighting configurations. Switch between them at runtime.</p>
-                </div>
-
-                <!-- Editor Dashboard -->
+                <!-- Object Cleanup -->
                 <div class="bg-vrc-darker rounded-xl p-6 border border-gray-800 hover:border-vrc-blue/50 transition-colors">
                     <div class="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center mb-4">
-                        <i class="fas fa-columns text-green-500 text-xl"></i>
+                        <i class="fas fa-undo text-green-500 text-xl"></i>
                     </div>
-                    <h3 class="text-lg font-semibold mb-2">Editor Dashboard</h3>
-                    <p class="text-gray-400 text-sm">World management, visual tools, interactables setup, and performance auditing in one place.</p>
+                    <h3 class="text-lg font-semibold mb-2">Object Cleanup</h3>
+                    <p class="text-gray-400 text-sm">Track pickupable objects and reset them to original positions. StrangeCleanup component with world-space UI button creation and audio feedback.</p>
                 </div>
 
                 <!-- World Auditor -->
@@ -121,7 +99,70 @@
                         <i class="fas fa-search text-red-500 text-xl"></i>
                     </div>
                     <h3 class="text-lg font-semibold mb-2">World Auditor</h3>
-                    <p class="text-gray-400 text-sm">Performance scanning, occlusion culling checks, and asset weight analysis for optimization.</p>
+                    <p class="text-gray-400 text-sm">Comprehensive performance scanning with PC/Quest profiles. Occlusion culling, static batching, realtime lights, PhysBones, audio, particles, and more.</p>
+                </div>
+
+                <!-- GPU Instancing -->
+                <div class="bg-vrc-darker rounded-xl p-6 border border-gray-800 hover:border-vrc-blue/50 transition-colors">
+                    <div class="w-12 h-12 bg-yellow-500/20 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-layer-group text-yellow-500 text-xl"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold mb-2">GPU Instancing</h3>
+                    <p class="text-gray-400 text-sm">Hierarchical instancing detection with material consolidation workflow. Per-object selection, material thumbnails, and static batching integration.</p>
+                </div>
+
+                <!-- Quest Conversion -->
+                <div class="bg-vrc-darker rounded-xl p-6 border border-gray-800 hover:border-vrc-blue/50 transition-colors">
+                    <div class="w-12 h-12 bg-teal-500/20 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-mobile-alt text-teal-500 text-xl"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold mb-2">Quest Conversion</h3>
+                    <p class="text-gray-400 text-sm">Automated Quest scene workflow with material cloning, shader swapping, audio optimization, and transform sync from PC scene.</p>
+                </div>
+
+                <!-- Atmosphere Presets -->
+                <div class="bg-vrc-darker rounded-xl p-6 border border-gray-800 hover:border-vrc-blue/50 transition-colors">
+                    <div class="w-12 h-12 bg-orange-500/20 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-sun text-orange-500 text-xl"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold mb-2">Atmosphere Presets</h3>
+                    <p class="text-gray-400 text-sm">Define multiple skybox, fog, and lighting configurations with linked root objects. Preview in editor and switch at runtime.</p>
+                </div>
+
+                <!-- Material Manager -->
+                <div class="bg-vrc-darker rounded-xl p-6 border border-gray-800 hover:border-vrc-blue/50 transition-colors">
+                    <div class="w-12 h-12 bg-indigo-500/20 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-palette text-indigo-500 text-xl"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold mb-2">Material Manager</h3>
+                    <p class="text-gray-400 text-sm">Batch shader swapping with whitelist/blacklist modes. Material thumbnails, smart shader sorting, and one-click Quest optimization.</p>
+                </div>
+
+                <!-- Lighting Workflow -->
+                <div class="bg-vrc-darker rounded-xl p-6 border border-gray-800 hover:border-vrc-blue/50 transition-colors">
+                    <div class="w-12 h-12 bg-amber-500/20 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-lightbulb text-amber-500 text-xl"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold mb-2">Lighting Workflow</h3>
+                    <p class="text-gray-400 text-sm">Streamlined 3-step workflow with lighting presets. One-click PC/Quest settings, Bakery integration, and auto-generate scene volumes.</p>
+                </div>
+
+                <!-- Smart Toggles -->
+                <div class="bg-vrc-darker rounded-xl p-6 border border-gray-800 hover:border-vrc-blue/50 transition-colors">
+                    <div class="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-toggle-on text-purple-500 text-xl"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold mb-2">Smart Toggles</h3>
+                    <p class="text-gray-400 text-sm">Persistent interactive toggles with world-space UI creation. GameObject control, animator parameters, emission colors, and audio feedback.</p>
+                </div>
+
+                <!-- Scene Weight Inspector -->
+                <div class="bg-vrc-darker rounded-xl p-6 border border-gray-800 hover:border-vrc-blue/50 transition-colors">
+                    <div class="w-12 h-12 bg-cyan-500/20 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-weight-hanging text-cyan-500 text-xl"></i>
+                    </div>
+                    <h3 class="text-lg font-semibold mb-2">Scene Weight Inspector</h3>
+                    <p class="text-gray-400 text-sm">Analyze meshes, textures, and audio by memory usage. Inline texture resizing and compression controls. VRAM and download size estimates.</p>
                 </div>
 
                 <!-- Expansions -->
@@ -130,7 +171,7 @@
                         <i class="fas fa-puzzle-piece text-pink-500 text-xl"></i>
                     </div>
                     <h3 class="text-lg font-semibold mb-2">Expansions</h3>
-                    <p class="text-gray-400 text-sm">Modular add-on system for extending toolkit functionality with custom features.</p>
+                    <p class="text-gray-400 text-sm">Modular add-on system for extending toolkit functionality with community-created features and custom tools.</p>
                 </div>
             </div>
         </div>
@@ -171,6 +212,9 @@
                 MIT License &copy; bellastrangevr
             </p>
             <div class="flex gap-6">
+                <a href="https://www.patreon.com/bellastrangevr" target="_blank" class="text-gray-500 hover:text-patreon text-sm transition-colors">
+                    Patreon
+                </a>
                 <a href="https://discord.gg/ZV5nK5vNFP" target="_blank" class="text-gray-500 hover:text-discord text-sm transition-colors">
                     Discord
                 </a>

@@ -12,8 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c333ccfdd0cbdbc4ca30cef2dd6e6b9b, type: 3}
   m_Name: StrangeHub
   m_EditorClassIdentifier: 
-  serializedUdonProgramAsset: {fileID: 11400000, guid: 590eb1b2ac05a064c8c5da3191d8c01e,
-    type: 2}
+  serializedUdonProgramAsset: {fileID: 11400000, guid: 4663b174866f7eb4db18498f9eaf496f, type: 2}
   udonAssembly: 
   assemblyError: 
   sourceCsScript: {fileID: 11500000, guid: bc88c2fc62c1e3b4f8cb798be0a71835, type: 3}

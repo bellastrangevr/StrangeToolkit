@@ -10,7 +10,7 @@ using UnityEngine.Profiling;
 namespace StrangeToolkit
 {
     [System.Serializable]
-    public class BlacklistEntry
+    public class TargetEntry
     {
         public GameObject obj;
         public bool includeChildren = true;
@@ -57,8 +57,10 @@ namespace StrangeToolkit
         private GUIStyle _whitelistButtonStyle, _blacklistButtonStyle;
         private GUIStyle _foldoutStyle;
 
+        private Texture2D _logoTexture;
+
         private bool _scanComplete = false;
-        private Type _tVRC_LPPV, _tRedSim_LPPV, _tBakery;
+        private Type _tRedSim_LPPV, _tBakery;
 
         private StrangeHub _cachedHub;
         private double _lastHubCheckTime;
@@ -98,22 +100,23 @@ namespace StrangeToolkit
         private string _buildDataSize = "";
 
         private long _totalVRAMBytes = 0;
+        private long _estimatedDownloadBytes = 0;
 
         private LightingPreset _lightingPreset;
         private float _maxVolumeSize = 250f;
-        private Vector2 _mainScrollPos, _auditorScrollPos, _blacklistScrollPos;
+        private Vector2 _mainScrollPos, _auditorScrollPos, _targetListScrollPos, _togglesScrollPos;
         private string[] _sortedShaderNames;
         private int _selectedShaderIndex = 0;
         private bool _shadersLoaded = false;
 
-        [SerializeField] private bool _useWhitelistMode = false;
-        [SerializeField] private List<BlacklistEntry> _blacklistObjects = new List<BlacklistEntry>();
-        [SerializeField] private List<Material> _blacklistMaterials = new List<Material>();
+        // Interactables tab state
+        private Dictionary<StrangeToggle, bool> _toggleExpanded = new Dictionary<StrangeToggle, bool>();
+        private enum ColliderOption { None, Box, Sphere, Capsule, MeshCollider }
+        private ColliderOption _toggleColliderOption = ColliderOption.Box;
 
-        // Material Consolidator state
-        private InstancingIssue _selectedConsolidationIssue;
-        private int _selectedMasterMaterialIndex = 0;
-        private InstancingIssue _selectedConversionIssue;
+        [SerializeField] private bool _useWhitelistMode = false;
+        [SerializeField] private List<TargetEntry> _targetObjects = new List<TargetEntry>();
+        [SerializeField] private List<Material> _targetMaterials = new List<Material>();
 
         // Expansions data
         private class ExpansionInfo
@@ -131,7 +134,7 @@ namespace StrangeToolkit
         private void OnEnable()
         {
             SimpleScan();
-            ScanForExpansions();
+            _expansionsNeedRescan = true;
             EditorSceneManager.sceneOpened += OnSceneOpened;
             EditorSceneManager.sceneClosed += OnSceneClosed;
             EditorApplication.projectChanged += OnProjectChanged;
@@ -146,7 +149,7 @@ namespace StrangeToolkit
 
         private void OnProjectChanged()
         {
-            ScanForExpansions();
+            _expansionsNeedRescan = true;
             Repaint();
         }
 
@@ -167,7 +170,7 @@ namespace StrangeToolkit
             double currentTime = EditorApplication.timeSinceStartup;
             if (_cachedHub == null || currentTime - _lastHubCheckTime > HUB_CACHE_DURATION)
             {
-                _cachedHub = FindObjectOfType<StrangeHub>();
+                _cachedHub = FindFirstObjectByType<StrangeHub>();
                 _lastHubCheckTime = currentTime;
             }
             return _cachedHub;
@@ -175,8 +178,8 @@ namespace StrangeToolkit
 
         private void OnGUI()
         {
-            if (_blacklistObjects == null) _blacklistObjects = new List<BlacklistEntry>();
-            if (_blacklistMaterials == null) _blacklistMaterials = new List<Material>();
+            if (_targetObjects == null) _targetObjects = new List<TargetEntry>();
+            if (_targetMaterials == null) _targetMaterials = new List<Material>();
 
             InitStyles();
 
@@ -205,8 +208,31 @@ namespace StrangeToolkit
             GUILayout.BeginArea(new Rect(0, 0, 160, position.height));
             GUILayout.Box("", GUILayout.Width(160), GUILayout.Height(position.height));
             GUILayout.BeginArea(new Rect(5, 5, 150, position.height));
-            GUILayout.Label("STRANGE\nTOOLKIT", _headerStyle);
-            GUILayout.Space(20);
+
+            // Draw logo
+            if (_logoTexture == null)
+            {
+                // Find the logo in Editor/Resources folder
+                string[] guids = AssetDatabase.FindAssets("StrangeToolkitLogo t:Texture2D");
+                if (guids.Length > 0)
+                {
+                    string path = AssetDatabase.GUIDToAssetPath(guids[0]);
+                    _logoTexture = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+                }
+            }
+
+            if (_logoTexture != null)
+            {
+                float logoWidth = 140;
+                float aspectRatio = (float)_logoTexture.height / _logoTexture.width;
+                float logoHeight = logoWidth * aspectRatio;
+                GUILayout.Box(_logoTexture, GUIStyle.none, GUILayout.Width(logoWidth), GUILayout.Height(logoHeight));
+            }
+            else
+            {
+                GUILayout.Label("STRANGE\nTOOLKIT", _headerStyle);
+            }
+            GUILayout.Space(10);
 
             DrawTabButton("World", ToolkitTab.World);
             DrawTabButton("Visuals", ToolkitTab.Visuals);

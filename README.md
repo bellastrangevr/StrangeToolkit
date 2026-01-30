@@ -16,22 +16,31 @@ A Unity editor toolkit for VRChat world creators. Provides atmosphere presets, s
 Central manager for your world that handles:
 - **Atmosphere Presets** - Define multiple skybox/fog/lighting configurations and switch between them at runtime
 - **Toggle Persistence** - Save and restore toggle states across sessions
-- **Object Cleanup** - Track loose objects and reset them to original positions
+
+### Object Cleanup (StrangeCleanup)
+Track and reset pickupable objects:
+- Captures original positions/rotations on world load
+- Reset button returns all tracked objects to starting positions
+- Automatically drops held pickups before reset
+- World-space UI button creation
 
 ### Smart Toggles
-Interactive toggles that can:
+Interactive toggles with world-space UI support:
 - Toggle GameObjects on/off
 - Control animator parameters
 - Change material emission colors
 - Play audio feedback
 - Persist state via the Hub
+- Create VRChat UI toggles with checkmark indicators
 
 ### Editor Dashboard
 Access via `Strange Toolkit > Open Dashboard`:
-- **World Tab** - Manage atmosphere presets and object cleanup
-- **Visuals Tab** - Lighting tools, LPPV creation, mass shader swapping
-- **Interactables Tab** - Quickly add smart toggles to objects
+- **World Tab** - Manage atmosphere presets, object cleanup, external tool status
+- **Visuals Tab** - Lighting workflow with presets, GPU instancing tools, material manager
+- **Interactables Tab** - Smart toggles with world-space UI creation
 - **Auditor Tab** - Performance scanning, occlusion culling checks, asset weight analysis
+- **Quest Tab** - Quest conversion workflow with transform sync
+- **Expansions Tab** - Modular add-on management
 
 ## Installation
 

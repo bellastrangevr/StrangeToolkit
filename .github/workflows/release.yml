@@ -66,7 +66,7 @@ jobs:
           type: "zip"
           directory: "${{env.packagePath}}/"
           filename: "../../${{env.zipFile}}"
-          exclusions: "*.git* *.github* .gitignore .gitattributes vpm.json README.md docs/*"
+          exclusions: "*.git* *.github* .gitignore .gitattributes .gitkeep vpm.json README.md docs/*"
 
       - name: Create UnityPackage
         if: ${{ steps.checkReleaseTag.outputs.exists == 'false' }}
