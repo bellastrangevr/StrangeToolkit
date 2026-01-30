@@ -18,12 +18,15 @@ Central manager for your world that handles:
 - **Toggle Persistence** - Save and restore toggle states across sessions
 
 ### Object Cleanup (StrangeCleanup)
-Track and reset pickupable objects:
+Track and reset pickupable objects with multiple cleanup groups:
+- Create separate reset buttons for different object sets
+- Each group manages its own tracked objects independently
 - Captures original positions/rotations on world load
 - Reset button returns all tracked objects to starting positions
 - Automatically drops held pickups before reset
 - World-space UI button creation
 - Global sync option to reset for all players
+- Auto respawn after configurable idle time
 
 ### Smart Toggles
 Interactive toggles with world-space UI support:

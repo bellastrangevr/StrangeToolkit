@@ -16,7 +16,6 @@ public class StrangeHub : UdonSharpBehaviour
     public float[] atmoFogDensities;
     
     public GameObject[] atmoRoots;
-    public GameObject[] cleanupProps;
 
     // Toggle persistence
     private string[] _toggleIDs;

@@ -1,21 +1,25 @@
 using UnityEngine;
 using UnityEditor;
-using UnityEditor.SceneManagement;
-using UnityEngine.SceneManagement;
 using System.Collections.Generic;
 using System.Linq;
-using System.IO;
 
 namespace StrangeToolkit
 {
     public static partial class QuestConverter
     {
         // ==================================================================================
+        // CONSTANTS
+        // ==================================================================================
+        private const int TRANSPARENT_RENDER_QUEUE = 3000;
+        private const float DEFAULT_SHADOW_SIZE_THRESHOLD = 0.2f;
+        private const float DEFAULT_TEXTURE_COMPRESSION_QUALITY = 0.5f;
+
+        // ==================================================================================
         // SHADERS & TEXTURES
         // ==================================================================================
         public static List<Material> GetNonMobileMaterials()
         {
-            var renderers = Object.FindObjectsOfType<Renderer>();
+            var renderers = Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None);
             HashSet<Material> mats = new HashSet<Material>();
             foreach (var r in renderers)
             {
@@ -38,7 +42,7 @@ namespace StrangeToolkit
         public static void SwapShaders(List<Material> mats, string shaderName)
         {
             Shader s = Shader.Find(shaderName);
-            if (s == null) { Debug.LogError($"[StrangeToolkit] Shader not found: {shaderName}"); return; }
+            if (s == null) { StrangeToolkitLogger.LogError($" Shader not found: {shaderName}"); return; }
             Undo.RecordObjects(mats.ToArray(), "Swap Quest Shaders");
             foreach (var m in mats) { m.shader = s; EditorUtility.SetDirty(m); }
         }
@@ -46,7 +50,7 @@ namespace StrangeToolkit
         public static List<Texture> GetTexturesMissingAndroidOverrides()
         {
             HashSet<Texture> textures = new HashSet<Texture>();
-            var renderers = Object.FindObjectsOfType<Renderer>();
+            var renderers = Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None);
             foreach (var r in renderers)
             {
                 foreach (var m in r.sharedMaterials)
@@ -112,7 +116,7 @@ namespace StrangeToolkit
         // ==================================================================================
         public static void OptimizeAudio()
         {
-            var audioSources = Object.FindObjectsOfType<AudioSource>();
+            var audioSources = Object.FindObjectsByType<AudioSource>(FindObjectsSortMode.None);
             HashSet<AudioClip> clips = new HashSet<AudioClip>();
             foreach (var a in audioSources) if (a.clip != null) clips.Add(a.clip);
 
@@ -135,7 +139,7 @@ namespace StrangeToolkit
                         AudioImporterSampleSettings settings = importer.GetOverrideSampleSettings("Android");
                         settings.loadType = clip.length > 10f ? AudioClipLoadType.Streaming : AudioClipLoadType.DecompressOnLoad;
                         settings.compressionFormat = clip.length > 5f ? AudioCompressionFormat.Vorbis : AudioCompressionFormat.ADPCM;
-                        settings.quality = 0.5f; // 50% quality is usually fine for Quest
+                        settings.quality = DEFAULT_TEXTURE_COMPRESSION_QUALITY;
 
                         importer.SetOverrideSampleSettings("Android", settings);
                         importer.SaveAndReimport();
@@ -151,7 +155,7 @@ namespace StrangeToolkit
         // ==================================================================================
         public static void ScaleParticles(float factor)
         {
-            var systems = Object.FindObjectsOfType<ParticleSystem>();
+            var systems = Object.FindObjectsByType<ParticleSystem>(FindObjectsSortMode.None);
             Undo.RecordObjects(systems, "Scale Particles");
             foreach (var ps in systems)
             {
@@ -165,7 +169,7 @@ namespace StrangeToolkit
 
         public static void DisableTransparentParticles()
         {
-            var systems = Object.FindObjectsOfType<ParticleSystemRenderer>();
+            var systems = Object.FindObjectsByType<ParticleSystemRenderer>(FindObjectsSortMode.None);
             List<GameObject> toDisable = new List<GameObject>();
 
             foreach(var psr in systems)
@@ -173,7 +177,7 @@ namespace StrangeToolkit
                 if(psr.sharedMaterial != null)
                 {
                     // Simple check for transparency
-                    if(psr.sharedMaterial.renderQueue >= 3000)
+                    if(psr.sharedMaterial.renderQueue >= TRANSPARENT_RENDER_QUEUE)
                         toDisable.Add(psr.gameObject);
                 }
             }
@@ -187,7 +191,7 @@ namespace StrangeToolkit
         // ==================================================================================
         public static void OptimizeRigidbodies()
         {
-            var rbs = Object.FindObjectsOfType<Rigidbody>();
+            var rbs = Object.FindObjectsByType<Rigidbody>(FindObjectsSortMode.None);
             Undo.RecordObjects(rbs, "Optimize Rigidbodies");
             foreach (var rb in rbs)
             {
@@ -196,9 +200,9 @@ namespace StrangeToolkit
             }
         }
 
-        public static void OptimizeShadowCasters(float sizeThreshold = 0.2f)
+        public static void OptimizeShadowCasters(float sizeThreshold = DEFAULT_SHADOW_SIZE_THRESHOLD)
         {
-            var renderers = Object.FindObjectsOfType<MeshRenderer>();
+            var renderers = Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
             List<MeshRenderer> toModify = new List<MeshRenderer>();
 
             foreach (var r in renderers)
@@ -252,7 +256,7 @@ namespace StrangeToolkit
                     if (c.gameObject.GetComponents<Component>().Length <= 2) // Transform + Volume
                         c.gameObject.SetActive(false);
                     else
-                        Object.DestroyImmediate(c);
+                        Undo.DestroyObjectImmediate(c);
                 }
             }
         }

@@ -644,7 +644,7 @@ namespace StrangeToolkit
             }
             else
             {
-                Debug.LogWarning("[StrangeToolkit] VRCUiShape not found. Add it manually to the canvas for VRChat UI interaction.");
+                StrangeToolkitLogger.LogWarning(" VRCUiShape not found. Add it manually to the canvas for VRChat UI interaction.");
             }
 
             RectTransform canvasRect = canvas.GetComponent<RectTransform>();

@@ -8,6 +8,17 @@ namespace StrangeToolkit
 {
     public partial class StrangeToolkitWindow
     {
+        // PhysBone thresholds for color coding
+        private const int PHYSBONE_COLLISION_CHECKS_HIGH = 512;
+        private const int PHYSBONE_COLLISION_CHECKS_MEDIUM = 256;
+        private const int PHYSBONE_ROW_CHECKS_HIGH = 128;
+        private const int PHYSBONE_ROW_CHECKS_MEDIUM = 64;
+        private const int PHYSBONE_NAME_MAX_LENGTH = 18;
+        private const int PHYSBONE_NAME_TRUNCATE_LENGTH = 15;
+        private const int PHYSBONE_SCROLL_ROW_HEIGHT = 24;
+        private const int PHYSBONE_SCROLL_PADDING = 10;
+        private const int PHYSBONE_SCROLL_MAX_HEIGHT = 120;
+
         // PhysBone stats
         private int _physBoneComponentCount;
         private int _physBoneTransformCount;
@@ -47,6 +58,11 @@ namespace StrangeToolkit
             var physBones = FindObjectsByType(physBoneType, FindObjectsSortMode.None);
             var uniqueColliders = new HashSet<Component>();
 
+            // Cache reflection lookups outside the loop for performance
+            var initMethod = physBoneType.GetMethod("InitTransforms", new Type[] { typeof(bool) });
+            var bonesField = physBoneType.GetField("bones") ?? physBoneType.BaseType?.GetField("bones");
+            var collidersField = physBoneType.GetField("colliders") ?? physBoneType.BaseType?.GetField("colliders");
+
             foreach (var pb in physBones)
             {
                 if (!(pb is Component comp)) continue;
@@ -59,20 +75,16 @@ namespace StrangeToolkit
                     name = comp.gameObject.name
                 };
 
-                // Get bone count using reflection
+                // Get bone count using cached reflection
                 try
                 {
                     // Call InitTransforms to ensure bones list is populated
-                    var initMethod = physBoneType.GetMethod("InitTransforms", new Type[] { typeof(bool) });
                     if (initMethod != null)
                     {
                         initMethod.Invoke(pb, new object[] { true });
                     }
 
                     // Get bones list
-                    var bonesField = physBoneType.GetField("bones")
-                        ?? physBoneType.BaseType?.GetField("bones");
-
                     if (bonesField != null)
                     {
                         var bonesList = bonesField.GetValue(pb) as System.Collections.IList;
@@ -84,9 +96,6 @@ namespace StrangeToolkit
                     }
 
                     // Get colliders list
-                    var collidersField = physBoneType.GetField("colliders")
-                        ?? physBoneType.BaseType?.GetField("colliders");
-
                     if (collidersField != null)
                     {
                         var collidersList = collidersField.GetValue(pb) as System.Collections.IList;
@@ -136,9 +145,9 @@ namespace StrangeToolkit
             if (_physBoneComponentCount > 0)
             {
                 // Color code by collision check count
-                if (_physBoneCollisionCheckCount > 512)
+                if (_physBoneCollisionCheckCount > PHYSBONE_COLLISION_CHECKS_HIGH)
                     GUI.color = new Color(1f, 0.4f, 0.4f);
-                else if (_physBoneCollisionCheckCount > 256)
+                else if (_physBoneCollisionCheckCount > PHYSBONE_COLLISION_CHECKS_MEDIUM)
                     GUI.color = new Color(1f, 0.8f, 0.4f);
                 else
                     GUI.color = new Color(0.4f, 0.8f, 0.4f);
@@ -171,7 +180,7 @@ namespace StrangeToolkit
                     GUILayout.Space(3);
 
                     // Component list
-                    _physBoneScroll = EditorGUILayout.BeginScrollView(_physBoneScroll, GUILayout.Height(Mathf.Min(120, _physBoneInfoList.Count * 24 + 10)));
+                    _physBoneScroll = EditorGUILayout.BeginScrollView(_physBoneScroll, GUILayout.Height(Mathf.Min(PHYSBONE_SCROLL_MAX_HEIGHT, _physBoneInfoList.Count * PHYSBONE_SCROLL_ROW_HEIGHT + PHYSBONE_SCROLL_PADDING)));
 
                     foreach (var info in _physBoneInfoList.OrderByDescending(x => x.collisionChecks))
                     {
@@ -198,7 +207,7 @@ namespace StrangeToolkit
 
             // Name (truncated)
             string displayName = info.name;
-            if (displayName.Length > 18) displayName = displayName.Substring(0, 15) + "...";
+            if (displayName.Length > PHYSBONE_NAME_MAX_LENGTH) displayName = displayName.Substring(0, PHYSBONE_NAME_TRUNCATE_LENGTH) + "...";
             GUILayout.Label(displayName, EditorStyles.miniLabel, GUILayout.Width(120));
 
             // Stats
@@ -208,9 +217,9 @@ namespace StrangeToolkit
             GUI.color = Color.white;
 
             // Collision checks with color coding
-            if (info.collisionChecks > 128)
+            if (info.collisionChecks > PHYSBONE_ROW_CHECKS_HIGH)
                 GUI.color = new Color(1f, 0.4f, 0.4f);
-            else if (info.collisionChecks > 64)
+            else if (info.collisionChecks > PHYSBONE_ROW_CHECKS_MEDIUM)
                 GUI.color = new Color(1f, 0.8f, 0.4f);
 
             GUILayout.Label($"{info.collisionChecks} checks", EditorStyles.miniLabel, GUILayout.Width(55));

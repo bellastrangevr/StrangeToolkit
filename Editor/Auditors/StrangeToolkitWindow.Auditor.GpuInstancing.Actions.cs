@@ -55,9 +55,10 @@ namespace StrangeToolkit
                         _materialBlacklist.Add(guid);
                 }
             }
-            catch (System.Exception)
+            catch (System.Exception ex)
             {
                 // Invalid JSON, start fresh
+                StrangeToolkitLogger.LogWarning($" Failed to load material blacklist: {ex.Message}");
                 _materialBlacklist.Clear();
             }
         }

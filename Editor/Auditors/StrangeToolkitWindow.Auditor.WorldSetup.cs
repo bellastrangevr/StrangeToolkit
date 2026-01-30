@@ -55,7 +55,7 @@ namespace StrangeToolkit
                         return _cachedSceneDescriptorType;
                     }
                 }
-                catch
+                catch (System.Exception)
                 {
                     // Some assemblies may throw on GetTypes(), skip them
                 }

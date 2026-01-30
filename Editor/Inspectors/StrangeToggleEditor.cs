@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEditor;
+using StrangeToolkit;
 
 [CustomEditor(typeof(StrangeToggle))]
 [CanEditMultipleObjects]
@@ -325,7 +326,7 @@ public class StrangeToggleEditor : Editor
 
         // Destroy the canvas
         Undo.DestroyObjectImmediate(canvas.gameObject);
-        Debug.Log("[StrangeToolkit] Removed UI Toggle from '" + toggle.gameObject.name + "'");
+        StrangeToolkitLogger.Log(" Removed UI Toggle from '" + toggle.gameObject.name + "'");
     }
 
     private void CreateUIToggleVisuals(StrangeToggle toggle)
@@ -374,7 +375,7 @@ public class StrangeToggleEditor : Editor
         }
         else
         {
-            Debug.LogWarning("[StrangeToolkit] VRCUiShape not found. Add it manually to the canvas for VRChat UI interaction.");
+            StrangeToolkitLogger.LogWarning(" VRCUiShape not found. Add it manually to the canvas for VRChat UI interaction.");
         }
 
         RectTransform canvasRect = canvas.GetComponent<RectTransform>();

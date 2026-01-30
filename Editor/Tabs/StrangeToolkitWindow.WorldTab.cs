@@ -11,6 +11,7 @@ namespace StrangeToolkit
         private bool _showAtmospheres = true;
         private bool _showCleanup = true;
         private bool _showExternalTools = true;
+        private Dictionary<StrangeCleanup, bool> _cleanupGroupExpanded = new Dictionary<StrangeCleanup, bool>();
 
         private void DrawWorldTab()
         {
@@ -257,29 +258,14 @@ namespace StrangeToolkit
 
         private void DrawCleanupSection(StrangeHub hub)
         {
-            // Clean up null references from the array
-            if (hub.cleanupProps != null)
+            // Find all cleanup groups in scene
+            var cleanupGroups = FindObjectsByType<StrangeCleanup>(FindObjectsSortMode.None);
+            int totalTrackedObjects = 0;
+            foreach (var cleanup in cleanupGroups)
             {
-                var validProps = new List<GameObject>();
-                bool hadNulls = false;
-                foreach (var prop in hub.cleanupProps)
-                {
-                    if (prop != null)
-                        validProps.Add(prop);
-                    else
-                        hadNulls = true;
-                }
-                if (hadNulls)
-                {
-                    hub.cleanupProps = validProps.ToArray();
-                    EditorUtility.SetDirty(hub);
-                }
+                if (cleanup.cleanupProps != null)
+                    totalTrackedObjects += cleanup.cleanupProps.Length;
             }
-
-            int cleanupCount = hub.cleanupProps != null ? hub.cleanupProps.Length : 0;
-
-            // Check for existing cleanup button in scene
-            var existingCleanup = FindObjectOfType<StrangeCleanup>();
 
             EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 
@@ -287,10 +273,10 @@ namespace StrangeToolkit
             _showCleanup = EditorGUILayout.Foldout(_showCleanup, "Object Auto-Cleanup", true, _foldoutStyle);
             GUILayout.FlexibleSpace();
 
-            if (cleanupCount > 0)
+            if (cleanupGroups.Length > 0)
             {
                 GUI.color = new Color(0.4f, 0.8f, 0.4f);
-                GUILayout.Label($"{cleanupCount} object(s)", EditorStyles.miniLabel);
+                GUILayout.Label($"{cleanupGroups.Length} group(s), {totalTrackedObjects} object(s)", EditorStyles.miniLabel);
                 GUI.color = Color.white;
             }
             else
@@ -304,129 +290,132 @@ namespace StrangeToolkit
             if (_showCleanup)
             {
                 GUILayout.Space(3);
-                GUILayout.Label("Track loose objects (pickupables). Reset button returns them to original positions.", EditorStyles.miniLabel);
+                GUILayout.Label("Create cleanup groups. Each group has its own reset button and tracked objects.", EditorStyles.miniLabel);
                 GUILayout.Space(5);
 
-                // Cleanup Button status
-                EditorGUILayout.BeginVertical(_listItemStyle);
-                EditorGUILayout.BeginHorizontal();
-                GUILayout.Label("Reset Button:", EditorStyles.miniLabel, GUILayout.Width(80));
-                if (existingCleanup != null)
+                // List all cleanup groups
+                if (cleanupGroups.Length > 0)
                 {
-                    GUI.color = new Color(0.4f, 0.8f, 0.4f);
-                    GUILayout.Label(existingCleanup.gameObject.name, EditorStyles.miniLabel);
-                    GUI.color = Color.white;
-                    GUILayout.FlexibleSpace();
-                    if (GUILayout.Button("Sel", EditorStyles.miniButton, GUILayout.Width(30)))
+                    foreach (var cleanup in cleanupGroups)
                     {
-                        Selection.activeGameObject = existingCleanup.gameObject;
-                        EditorGUIUtility.PingObject(existingCleanup.gameObject);
-                    }
-                }
-                else
-                {
-                    GUI.color = new Color(1f, 0.8f, 0.4f);
-                    GUILayout.Label("Not Created", EditorStyles.miniLabel);
-                    GUI.color = Color.white;
-                    GUILayout.FlexibleSpace();
-                    if (GUILayout.Button("Create", EditorStyles.miniButton, GUILayout.Width(50)))
-                    {
-                        CreateCleanupButton(hub);
-                    }
-                }
-                EditorGUILayout.EndHorizontal();
-                EditorGUILayout.EndVertical();
+                        int propCount = cleanup.cleanupProps != null ? cleanup.cleanupProps.Length : 0;
 
-                GUILayout.Space(5);
+                        // Ensure expansion state exists
+                        if (!_cleanupGroupExpanded.ContainsKey(cleanup))
+                            _cleanupGroupExpanded[cleanup] = false;
 
-                // List cleanup objects
-                if (cleanupCount > 0)
-                {
-                    GUILayout.Label("Tracked Objects:", EditorStyles.miniLabel);
-                    int removeIndex = -1;
-                    for (int i = 0; i < hub.cleanupProps.Length; i++)
-                    {
-                        var prop = hub.cleanupProps[i];
-                        if (prop == null) continue;
+                        EditorGUILayout.BeginVertical(_listItemStyle);
 
-                        EditorGUILayout.BeginHorizontal(_listItemStyle);
-                        GUILayout.Label(prop.name, EditorStyles.miniLabel);
+                        EditorGUILayout.BeginHorizontal();
+
+                        // Foldout for expansion
+                        _cleanupGroupExpanded[cleanup] = EditorGUILayout.Foldout(_cleanupGroupExpanded[cleanup], "", true);
+                        GUILayout.Space(-5);
+
+                        // Name and status
+                        GUILayout.Label(cleanup.gameObject.name, EditorStyles.miniLabel, GUILayout.Width(120));
+
+                        // Object count
+                        GUI.color = propCount > 0 ? new Color(0.4f, 0.8f, 0.4f) : new Color(1f, 0.8f, 0.4f);
+                        GUILayout.Label($"{propCount} obj", EditorStyles.miniLabel, GUILayout.Width(40));
+                        GUI.color = Color.white;
+
+                        // Global sync indicator
+                        if (cleanup.useGlobalSync)
+                        {
+                            GUI.color = new Color(0.4f, 0.7f, 1f);
+                            GUILayout.Label("[Sync]", EditorStyles.miniLabel, GUILayout.Width(40));
+                            GUI.color = Color.white;
+                        }
+                        else
+                        {
+                            GUILayout.Label("", GUILayout.Width(40));
+                        }
+
                         GUILayout.FlexibleSpace();
+
                         if (GUILayout.Button("Sel", EditorStyles.miniButton, GUILayout.Width(30)))
                         {
-                            Selection.activeGameObject = prop;
-                            EditorGUIUtility.PingObject(prop);
+                            Selection.activeGameObject = cleanup.gameObject;
+                            EditorGUIUtility.PingObject(cleanup.gameObject);
                         }
-                        if (GUILayout.Button("X", EditorStyles.miniButton, GUILayout.Width(22)))
-                        {
-                            removeIndex = i;
-                        }
+
                         EditorGUILayout.EndHorizontal();
-                    }
 
-                    if (removeIndex >= 0)
-                    {
-                        GameObject removedProp = hub.cleanupProps[removeIndex];
-
-                        Undo.RecordObject(hub, "Remove Prop from Cleanup");
-                        var list = new List<GameObject>(hub.cleanupProps);
-                        list.RemoveAt(removeIndex);
-                        hub.cleanupProps = list.ToArray();
-                        EditorUtility.SetDirty(hub);
-
-                        // Remove VRCObjectSync if Global Sync was enabled
-                        if (existingCleanup != null && existingCleanup.useGlobalSync && removedProp != null)
+                        // Expanded view - show tracked objects
+                        if (_cleanupGroupExpanded[cleanup] && cleanup.cleanupProps != null && cleanup.cleanupProps.Length > 0)
                         {
-                            RemoveObjectSyncFromProp(removedProp);
+                            EditorGUI.indentLevel++;
+                            foreach (var obj in cleanup.cleanupProps)
+                            {
+                                if (obj == null) continue;
+
+                                EditorGUILayout.BeginHorizontal();
+                                GUILayout.Space(20);
+
+                                string objName = obj.name;
+                                if (objName.Length > 25) objName = objName.Substring(0, 22) + "...";
+                                GUILayout.Label(objName, EditorStyles.miniLabel, GUILayout.Width(160));
+
+                                GUILayout.FlexibleSpace();
+
+                                if (GUILayout.Button("Sel", EditorStyles.miniButton, GUILayout.Width(30)))
+                                {
+                                    Selection.activeGameObject = obj;
+                                    EditorGUIUtility.PingObject(obj);
+                                }
+
+                                EditorGUILayout.EndHorizontal();
+                            }
+                            EditorGUI.indentLevel--;
                         }
+                        else if (_cleanupGroupExpanded[cleanup] && (cleanup.cleanupProps == null || cleanup.cleanupProps.Length == 0))
+                        {
+                            EditorGUILayout.BeginHorizontal();
+                            GUILayout.Space(25);
+                            GUI.color = new Color(0.6f, 0.6f, 0.6f);
+                            GUILayout.Label("No objects tracked", EditorStyles.miniLabel);
+                            GUI.color = Color.white;
+                            EditorGUILayout.EndHorizontal();
+                        }
+
+                        EditorGUILayout.EndVertical();
+                        GUILayout.Space(2);
                     }
 
-                    GUILayout.Space(5);
+                    GUILayout.Space(3);
                 }
 
-                if (GUILayout.Button("Add Selected Objects", EditorStyles.miniButton))
+                if (GUILayout.Button("+ New Cleanup Group", EditorStyles.miniButton))
                 {
-                    Undo.RecordObject(hub, "Add Props to Cleanup");
-                    List<GameObject> props = new List<GameObject>(hub.cleanupProps ?? new GameObject[0]);
-                    List<GameObject> newlyAdded = new List<GameObject>();
-                    foreach (GameObject go in Selection.gameObjects)
-                    {
-                        if (!props.Contains(go))
-                        {
-                            props.Add(go);
-                            newlyAdded.Add(go);
-                        }
-                    }
-                    hub.cleanupProps = props.ToArray();
-                    EditorUtility.SetDirty(hub);
-
-                    // If Global Sync is enabled, add VRCObjectSync to newly added objects
-                    if (newlyAdded.Count > 0 && existingCleanup != null && existingCleanup.useGlobalSync)
-                    {
-                        AddObjectSyncToProps(newlyAdded);
-                    }
-
-                    if (newlyAdded.Count > 0)
-                        StrangeToolkitLogger.LogSuccess($"Added {newlyAdded.Count} object(s) to cleanup list");
-                    else if (Selection.gameObjects.Length == 0)
-                        StrangeToolkitLogger.LogWarning("No objects selected. Select objects in the Hierarchy first.");
-                    else
-                        StrangeToolkitLogger.Log("All selected objects are already in the cleanup list.");
+                    CreateCleanupButton();
                 }
             }
 
             EditorGUILayout.EndVertical();
         }
 
-        private void CreateCleanupButton(StrangeHub hub)
+        private void CreateCleanupButton()
         {
+            // Capture selected objects before creating the cleanup button
+            List<GameObject> selectedObjects = new List<GameObject>();
+            foreach (GameObject obj in Selection.gameObjects)
+            {
+                selectedObjects.Add(obj);
+            }
+
             GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cube);
             go.name = "Cleanup_Button";
             go.transform.localScale = new Vector3(0.3f, 0.3f, 0.1f);
 
             // Add StrangeCleanup component
             var cleanup = go.AddComponent<StrangeCleanup>();
-            cleanup.hub = hub;
+
+            // Auto-add selected objects if any were selected
+            if (selectedObjects.Count > 0)
+            {
+                cleanup.cleanupProps = selectedObjects.ToArray();
+            }
 
             // Set position in front of scene view camera
             if (SceneView.lastActiveSceneView != null)
@@ -441,50 +430,11 @@ namespace StrangeToolkit
 
             Undo.RegisterCreatedObjectUndo(go, "Create Cleanup Button");
             Selection.activeGameObject = go;
-            StrangeToolkitLogger.LogSuccess("Created Cleanup Button in scene");
-        }
 
-        private void AddObjectSyncToProps(List<GameObject> props)
-        {
-            // Find VRCObjectSync type
-            System.Type objectSyncType = null;
-            foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies())
-            {
-                objectSyncType = assembly.GetType("VRC.SDK3.Components.VRCObjectSync");
-                if (objectSyncType != null) break;
-            }
-
-            if (objectSyncType == null) return;
-
-            foreach (GameObject prop in props)
-            {
-                if (prop == null) continue;
-                if (prop.GetComponent(objectSyncType) == null)
-                {
-                    Undo.AddComponent(prop, objectSyncType);
-                }
-            }
-        }
-
-        private void RemoveObjectSyncFromProp(GameObject prop)
-        {
-            if (prop == null) return;
-
-            // Find VRCObjectSync type
-            System.Type objectSyncType = null;
-            foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies())
-            {
-                objectSyncType = assembly.GetType("VRC.SDK3.Components.VRCObjectSync");
-                if (objectSyncType != null) break;
-            }
-
-            if (objectSyncType == null) return;
-
-            Component existingSync = prop.GetComponent(objectSyncType);
-            if (existingSync != null)
-            {
-                Undo.DestroyObjectImmediate(existingSync);
-            }
+            if (selectedObjects.Count > 0)
+                StrangeToolkitLogger.LogSuccess($"Created Cleanup Button with {selectedObjects.Count} object(s)");
+            else
+                StrangeToolkitLogger.LogSuccess("Created Cleanup Button - drag objects to add them");
         }
 
         private void DrawExternalToolsSection()

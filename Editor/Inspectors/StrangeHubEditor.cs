@@ -8,7 +8,9 @@ public class StrangeHubEditor : Editor
 {
     private bool _showDebug = false;
     private bool _showToggles = true;
+    private bool _showCleanup = true;
     private Vector2 _toggleScrollPos;
+    private Vector2 _cleanupScrollPos;
 
     public override void OnInspectorGUI()
     {
@@ -127,6 +129,59 @@ public class StrangeHubEditor : Editor
                         StrangeToolkitLogger.LogSuccess($"Linked {unlinkedToggles.Count} toggle(s) to Hub");
                     }
                 }
+            }
+
+            EditorGUILayout.EndVertical();
+        }
+
+        GUILayout.Space(10);
+
+        // 5. LINKED CLEANUP GROUPS
+        _showCleanup = EditorGUILayout.Foldout(_showCleanup, "Linked Cleanup Groups", true);
+        if (_showCleanup)
+        {
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+            StrangeCleanup[] cleanups = FindObjectsByType<StrangeCleanup>(FindObjectsSortMode.None);
+
+            if (cleanups.Length == 0)
+            {
+                EditorGUILayout.HelpBox("No Cleanup Groups found in scene.\n\nUse the World tab in the Dashboard to create Cleanup Groups.", MessageType.Info);
+            }
+            else
+            {
+                EditorGUILayout.LabelField($"Groups: {cleanups.Length}", EditorStyles.boldLabel);
+                GUILayout.Space(5);
+
+                float maxHeight = Mathf.Min(200, cleanups.Length * 24 + 10);
+                _cleanupScrollPos = EditorGUILayout.BeginScrollView(_cleanupScrollPos, GUILayout.MaxHeight(maxHeight));
+
+                foreach (var cleanup in cleanups)
+                {
+                    EditorGUILayout.BeginHorizontal();
+
+                    // Status indicator
+                    int propCount = cleanup.cleanupProps != null ? cleanup.cleanupProps.Length : 0;
+                    GUI.color = propCount > 0 ? Color.green : Color.yellow;
+                    GUILayout.Label("●", GUILayout.Width(15));
+                    GUI.color = Color.white;
+
+                    if (GUILayout.Button(cleanup.gameObject.name, EditorStyles.linkLabel))
+                    {
+                        Selection.activeGameObject = cleanup.gameObject;
+                        EditorGUIUtility.PingObject(cleanup.gameObject);
+                    }
+
+                    GUILayout.FlexibleSpace();
+
+                    // Show sync status and object count
+                    string statusText = cleanup.useGlobalSync ? "[Sync]" : "[Local]";
+                    GUILayout.Label($"{propCount} obj {statusText}", EditorStyles.miniLabel, GUILayout.Width(90));
+
+                    EditorGUILayout.EndHorizontal();
+                }
+
+                EditorGUILayout.EndScrollView();
             }
 
             EditorGUILayout.EndVertical();

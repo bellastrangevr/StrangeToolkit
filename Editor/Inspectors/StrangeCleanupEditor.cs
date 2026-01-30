@@ -2,23 +2,26 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEditor;
 using UnityEditor.Events;
+using UnityEditor.SceneManagement;
 using System.Collections.Generic;
+using StrangeToolkit;
 
 [CustomEditor(typeof(StrangeCleanup))]
 [CanEditMultipleObjects]
 public class StrangeCleanupEditor : Editor
 {
-    private SerializedProperty hub;
+    private SerializedProperty cleanupProps;
     private SerializedProperty soundSource;
     private SerializedProperty resetSound;
 
     // Styles
     private GUIStyle cardStyle;
     private GUIStyle headerStyle;
+    private GUIStyle listItemStyle;
 
     private void OnEnable()
     {
-        hub = serializedObject.FindProperty("hub");
+        cleanupProps = serializedObject.FindProperty("cleanupProps");
         soundSource = serializedObject.FindProperty("soundSource");
         resetSound = serializedObject.FindProperty("resetSound");
     }
@@ -35,36 +38,133 @@ public class StrangeCleanupEditor : Editor
         GUILayout.Label("🔄 Cleanup Button", headerStyle);
         GUILayout.Space(5);
 
-        if (hub.objectReferenceValue == null)
-        {
-            EditorGUILayout.HelpBox("Disconnected from Hub! Drag Strange_Hub here.", MessageType.Error);
-            EditorGUILayout.PropertyField(hub);
-        }
-        else
-        {
-            GUI.enabled = false;
-            EditorGUILayout.TextField("Linked to:", "Strange Hub (OK)");
-            GUI.enabled = true;
-
-            // Show tracked props count
-            StrangeHub hubRef = (StrangeHub)hub.objectReferenceValue;
-            int propCount = hubRef.cleanupProps != null ? hubRef.cleanupProps.Length : 0;
-            EditorGUILayout.BeginHorizontal();
-            GUILayout.Label("Tracked Props:", EditorStyles.miniLabel);
-            GUI.color = propCount > 0 ? new Color(0.4f, 0.8f, 0.4f) : new Color(1f, 0.8f, 0.4f);
-            GUILayout.Label($"{propCount} object(s)", EditorStyles.miniLabel);
-            GUI.color = Color.white;
-            EditorGUILayout.EndHorizontal();
-        }
+        // Show tracked props count
+        int propCount = cleanup.cleanupProps != null ? cleanup.cleanupProps.Length : 0;
+        EditorGUILayout.BeginHorizontal();
+        GUILayout.Label("Tracked Props:", EditorStyles.miniLabel);
+        GUI.color = propCount > 0 ? new Color(0.4f, 0.8f, 0.4f) : new Color(1f, 0.8f, 0.4f);
+        GUILayout.Label($"{propCount} object(s)", EditorStyles.miniLabel);
+        GUI.color = Color.white;
+        EditorGUILayout.EndHorizontal();
         EditorGUILayout.EndVertical();
 
         GUILayout.Space(10);
 
-        // --- SECTION 1: OPTIONS ---
-        EditorGUILayout.LabelField("1. Options", EditorStyles.boldLabel);
+        SerializedProperty useGlobalSync = serializedObject.FindProperty("useGlobalSync");
+
+        // --- SECTION 1: TRACKED OBJECTS ---
+        EditorGUILayout.LabelField("1. Tracked Objects", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 
-        SerializedProperty useGlobalSync = serializedObject.FindProperty("useGlobalSync");
+        // Clean up null references
+        CleanupNullReferences(cleanup);
+
+        // List tracked objects
+        if (cleanup.cleanupProps != null && cleanup.cleanupProps.Length > 0)
+        {
+            int removeIndex = -1;
+            for (int i = 0; i < cleanup.cleanupProps.Length; i++)
+            {
+                var prop = cleanup.cleanupProps[i];
+                if (prop == null) continue;
+
+                EditorGUILayout.BeginHorizontal(listItemStyle);
+                GUILayout.Label(prop.name, EditorStyles.miniLabel);
+                GUILayout.FlexibleSpace();
+                if (GUILayout.Button("Sel", EditorStyles.miniButton, GUILayout.Width(30)))
+                {
+                    Selection.activeGameObject = prop;
+                    EditorGUIUtility.PingObject(prop);
+                }
+                if (GUILayout.Button("X", EditorStyles.miniButton, GUILayout.Width(22)))
+                {
+                    removeIndex = i;
+                }
+                EditorGUILayout.EndHorizontal();
+            }
+
+            if (removeIndex >= 0)
+            {
+                GameObject removedProp = cleanup.cleanupProps[removeIndex];
+
+                Undo.RecordObject(cleanup, "Remove Prop from Cleanup");
+                var list = new List<GameObject>(cleanup.cleanupProps);
+                list.RemoveAt(removeIndex);
+                cleanup.cleanupProps = list.ToArray();
+                EditorUtility.SetDirty(cleanup);
+
+                // Remove VRCObjectSync if Global Sync was enabled
+                if (useGlobalSync.boolValue && removedProp != null)
+                {
+                    RemoveObjectSyncFromProp(removedProp);
+                    RegenerateNetworkIDs();
+                }
+            }
+
+            GUILayout.Space(3);
+        }
+        else
+        {
+            GUI.color = new Color(0.6f, 0.6f, 0.6f);
+            GUILayout.Label("No objects tracked. Drag objects here to add them.", EditorStyles.miniLabel);
+            GUI.color = Color.white;
+            GUILayout.Space(3);
+        }
+
+        // Drag and drop area
+        Rect dropArea = GUILayoutUtility.GetRect(0, 40, GUILayout.ExpandWidth(true));
+        GUI.Box(dropArea, "Drag GameObjects Here", EditorStyles.helpBox);
+
+        Event evt = Event.current;
+        if (dropArea.Contains(evt.mousePosition))
+        {
+            if (evt.type == EventType.DragUpdated)
+            {
+                DragAndDrop.visualMode = DragAndDropVisualMode.Copy;
+                evt.Use();
+            }
+            else if (evt.type == EventType.DragPerform)
+            {
+                DragAndDrop.AcceptDrag();
+
+                Undo.RecordObject(cleanup, "Add Props to Cleanup");
+                List<GameObject> props = new List<GameObject>(cleanup.cleanupProps ?? new GameObject[0]);
+                List<GameObject> newlyAdded = new List<GameObject>();
+
+                foreach (Object draggedObject in DragAndDrop.objectReferences)
+                {
+                    GameObject go = draggedObject as GameObject;
+                    if (go != null && !props.Contains(go) && go != cleanup.gameObject)
+                    {
+                        props.Add(go);
+                        newlyAdded.Add(go);
+                    }
+                }
+
+                cleanup.cleanupProps = props.ToArray();
+                EditorUtility.SetDirty(cleanup);
+
+                // If Global Sync is enabled, add VRCObjectSync to newly added objects
+                if (newlyAdded.Count > 0 && useGlobalSync.boolValue)
+                {
+                    AddObjectSyncToProps(newlyAdded);
+                    RegenerateNetworkIDs();
+                }
+
+                if (newlyAdded.Count > 0)
+                    StrangeToolkitLogger.Log($" Added {newlyAdded.Count} object(s) to cleanup list");
+
+                evt.Use();
+            }
+        }
+
+        EditorGUILayout.EndVertical();
+        GUILayout.Space(10);
+
+        // --- SECTION 2: OPTIONS ---
+        EditorGUILayout.LabelField("2. Options", EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
         EditorGUI.BeginChangeCheck();
         EditorGUILayout.PropertyField(useGlobalSync, new GUIContent("Global Sync", "Sync reset to all players"));
         if (EditorGUI.EndChangeCheck())
@@ -82,13 +182,13 @@ public class StrangeCleanupEditor : Editor
 
         // Auto Respawn
         SerializedProperty useAutoRespawn = serializedObject.FindProperty("useAutoRespawn");
-        EditorGUILayout.PropertyField(useAutoRespawn, new GUIContent("Auto Respawn", "Automatically reset idle objects"));
+        EditorGUILayout.PropertyField(useAutoRespawn, new GUIContent("Auto Respawn", "Automatically reset objects after idle time"));
 
         if (useAutoRespawn.boolValue)
         {
             EditorGUI.indentLevel++;
             SerializedProperty autoRespawnMinutes = serializedObject.FindProperty("autoRespawnMinutes");
-            EditorGUILayout.PropertyField(autoRespawnMinutes, new GUIContent("Idle Time (minutes)", "Reset objects after this many minutes of not being moved"));
+            EditorGUILayout.PropertyField(autoRespawnMinutes, new GUIContent("Idle Time (minutes)", "Reset objects after this many minutes since last dropped"));
             EditorGUI.indentLevel--;
 
             if (useGlobalSync.boolValue)
@@ -104,8 +204,8 @@ public class StrangeCleanupEditor : Editor
         EditorGUILayout.EndVertical();
         GUILayout.Space(10);
 
-        // --- SECTION 2: AUDIO ---
-        EditorGUILayout.LabelField("2. The Feedback (Sound)", EditorStyles.boldLabel);
+        // --- SECTION 3: AUDIO ---
+        EditorGUILayout.LabelField("3. The Feedback (Sound)", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
         EditorGUILayout.PropertyField(soundSource);
         if (soundSource.objectReferenceValue != null)
@@ -115,8 +215,8 @@ public class StrangeCleanupEditor : Editor
         EditorGUILayout.EndVertical();
         GUILayout.Space(10);
 
-        // --- SECTION 3: TRIGGER ---
-        EditorGUILayout.LabelField("3. The Trigger (Collider)", EditorStyles.boldLabel);
+        // --- SECTION 4: TRIGGER ---
+        EditorGUILayout.LabelField("4. The Trigger (Collider)", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 
         Collider existingCollider = cleanup.GetComponent<Collider>();
@@ -246,7 +346,7 @@ public class StrangeCleanupEditor : Editor
 
     private void UpdateObjectSyncComponents(StrangeCleanup cleanup, bool addSync)
     {
-        if (cleanup.hub == null || cleanup.hub.cleanupProps == null) return;
+        if (cleanup.cleanupProps == null) return;
 
         // Find VRCObjectSync type
         System.Type objectSyncType = null;
@@ -258,12 +358,12 @@ public class StrangeCleanupEditor : Editor
 
         if (objectSyncType == null)
         {
-            Debug.LogWarning("[StrangeToolkit] VRCObjectSync type not found. Is VRChat SDK installed?");
+            StrangeToolkitLogger.LogWarning(" VRCObjectSync type not found. Is VRChat SDK installed?");
             return;
         }
 
         int modifiedCount = 0;
-        foreach (GameObject prop in cleanup.hub.cleanupProps)
+        foreach (GameObject prop in cleanup.cleanupProps)
         {
             if (prop == null) continue;
 
@@ -286,8 +386,17 @@ public class StrangeCleanupEditor : Editor
         if (modifiedCount > 0)
         {
             string action = addSync ? "Added" : "Removed";
-            Debug.Log($"[StrangeToolkit] {action} VRCObjectSync on {modifiedCount} tracked object(s)");
+            StrangeToolkitLogger.Log($" {action} VRCObjectSync on {modifiedCount} tracked object(s)");
+
+            // Regenerate network IDs to prevent conflicts
+            RegenerateNetworkIDs();
         }
+    }
+
+    private void RegenerateNetworkIDs()
+    {
+        // Mark scene dirty - VRChat SDK will assign network IDs automatically on build
+        EditorSceneManager.MarkSceneDirty(UnityEngine.SceneManagement.SceneManager.GetActiveScene());
     }
 
     private void InitStyles()
@@ -305,12 +414,82 @@ public class StrangeCleanupEditor : Editor
             headerStyle.fontStyle = FontStyle.Bold;
             headerStyle.alignment = TextAnchor.MiddleCenter;
         }
+
+        if (listItemStyle == null)
+        {
+            listItemStyle = new GUIStyle();
+            listItemStyle.padding = new RectOffset(5, 5, 2, 2);
+            listItemStyle.margin = new RectOffset(0, 0, 1, 1);
+        }
+    }
+
+    private void CleanupNullReferences(StrangeCleanup cleanup)
+    {
+        if (cleanup.cleanupProps == null) return;
+
+        var validProps = new List<GameObject>();
+        bool hadNulls = false;
+        foreach (var prop in cleanup.cleanupProps)
+        {
+            if (prop != null)
+                validProps.Add(prop);
+            else
+                hadNulls = true;
+        }
+        if (hadNulls)
+        {
+            cleanup.cleanupProps = validProps.ToArray();
+            EditorUtility.SetDirty(cleanup);
+        }
+    }
+
+    private void AddObjectSyncToProps(List<GameObject> props)
+    {
+        // Find VRCObjectSync type
+        System.Type objectSyncType = null;
+        foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies())
+        {
+            objectSyncType = assembly.GetType("VRC.SDK3.Components.VRCObjectSync");
+            if (objectSyncType != null) break;
+        }
+
+        if (objectSyncType == null) return;
+
+        foreach (GameObject prop in props)
+        {
+            if (prop == null) continue;
+            if (prop.GetComponent(objectSyncType) == null)
+            {
+                Undo.AddComponent(prop, objectSyncType);
+            }
+        }
+    }
+
+    private void RemoveObjectSyncFromProp(GameObject prop)
+    {
+        if (prop == null) return;
+
+        // Find VRCObjectSync type
+        System.Type objectSyncType = null;
+        foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies())
+        {
+            objectSyncType = assembly.GetType("VRC.SDK3.Components.VRCObjectSync");
+            if (objectSyncType != null) break;
+        }
+
+        if (objectSyncType == null) return;
+
+        Component existingSync = prop.GetComponent(objectSyncType);
+        if (existingSync != null)
+        {
+            Undo.DestroyObjectImmediate(existingSync);
+        }
     }
 
     private void RemoveUIButtonVisuals(StrangeCleanup cleanup, Canvas canvas)
     {
         Undo.DestroyObjectImmediate(canvas.gameObject);
-        Debug.Log("[StrangeToolkit] Removed UI Button from '" + cleanup.gameObject.name + "'");
+        StrangeToolkitLogger.Log(" Removed UI Button from '" + cleanup.gameObject.name + "'");
     }
 
     private void CreateUIButtonVisuals(StrangeCleanup cleanup)
@@ -353,7 +532,7 @@ public class StrangeCleanupEditor : Editor
         }
         else
         {
-            Debug.LogWarning("[StrangeToolkit] VRCUiShape not found. Add it manually to the canvas for VRChat UI interaction.");
+            StrangeToolkitLogger.LogWarning(" VRCUiShape not found. Add it manually to the canvas for VRChat UI interaction.");
         }
 
         RectTransform canvasRect = canvas.GetComponent<RectTransform>();
@@ -414,7 +593,7 @@ public class StrangeCleanupEditor : Editor
                 tmpType = assembly.GetType("TMPro.TextMeshProUGUI");
                 if (tmpType != null) break;
             }
-            catch { }
+            catch (System.Exception) { }
         }
 
         if (tmpType != null)
@@ -460,6 +639,6 @@ public class StrangeCleanupEditor : Editor
         }
 
         Selection.activeGameObject = canvasGO;
-        Debug.Log("[StrangeToolkit] Created UI Button for '" + cleanup.gameObject.name + "'");
+        StrangeToolkitLogger.Log(" Created UI Button for '" + cleanup.gameObject.name + "'");
     }
 }
