@@ -111,28 +111,51 @@ public class StrangeToggleEditor : Editor
         // --- SECTION 3: MEMORY ---
         EditorGUILayout.LabelField("3. The Brain (Options)", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-        
+
         EditorGUILayout.BeginHorizontal();
         EditorGUILayout.PropertyField(defaultOn, new GUIContent("Default State"));
         GUILayout.FlexibleSpace();
         EditorGUILayout.EndHorizontal();
 
-        // Persistence Logic
+        // Global Sync vs Persistence (mutually exclusive)
+        SerializedProperty useGlobalSync = serializedObject.FindProperty("useGlobalSync");
         SerializedProperty usePersistence = serializedObject.FindProperty("usePersistence");
-        EditorGUILayout.PropertyField(usePersistence, new GUIContent("Remember Choice?"));
-        
-        if (usePersistence.boolValue)
+
+        EditorGUILayout.BeginHorizontal();
+        EditorGUI.BeginChangeCheck();
+        EditorGUILayout.PropertyField(useGlobalSync, new GUIContent("Global Sync", "Sync toggle state to all players"));
+        if (EditorGUI.EndChangeCheck() && useGlobalSync.boolValue)
         {
-            EditorGUILayout.BeginHorizontal();
-            GUILayout.Label("Memory ID:", GUILayout.Width(70));
-            EditorGUILayout.PropertyField(persistenceID, GUIContent.none);
-            if (GUILayout.Button("Gen", GUILayout.Width(40)))
-            {
-                persistenceID.stringValue = System.Guid.NewGuid().ToString().Substring(0, 8);
-            }
-            EditorGUILayout.EndHorizontal();
+            usePersistence.boolValue = false;
         }
-        
+        EditorGUILayout.EndHorizontal();
+
+        if (useGlobalSync.boolValue)
+        {
+            EditorGUILayout.HelpBox("State syncs to all players including late joiners.", MessageType.Info);
+        }
+        else
+        {
+            EditorGUI.BeginChangeCheck();
+            EditorGUILayout.PropertyField(usePersistence, new GUIContent("Remember Choice?", "Save state per-player"));
+            if (EditorGUI.EndChangeCheck() && usePersistence.boolValue)
+            {
+                useGlobalSync.boolValue = false;
+            }
+
+            if (usePersistence.boolValue)
+            {
+                EditorGUILayout.BeginHorizontal();
+                GUILayout.Label("Memory ID:", GUILayout.Width(70));
+                EditorGUILayout.PropertyField(persistenceID, GUIContent.none);
+                if (GUILayout.Button("Gen", GUILayout.Width(40)))
+                {
+                    persistenceID.stringValue = System.Guid.NewGuid().ToString().Substring(0, 8);
+                }
+                EditorGUILayout.EndHorizontal();
+            }
+        }
+
         EditorGUILayout.EndVertical();
         GUILayout.Space(10);
 

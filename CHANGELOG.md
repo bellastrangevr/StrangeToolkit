@@ -15,6 +15,11 @@
   - List tracked objects with Sel/X buttons
   - Auto-cleanup of null references when objects are deleted
   - Reset Button status with Create button
+- **Global Sync** for StrangeToggle and StrangeCleanup
+  - Toggle state syncs to all players including late joiners
+  - Reset action syncs to all players
+  - Mutually exclusive with persistence (per-player) mode
+  - Manual sync mode with ownership transfer
 - **UI Button/Toggle Creation**
   - "Add UI Toggle" button creates world-space VRChat UI with checkmark
   - "Add UI Button" for cleanup reset buttons

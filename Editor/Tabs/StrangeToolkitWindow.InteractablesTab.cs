@@ -351,21 +351,43 @@ namespace StrangeToolkit
 
             EditorGUILayout.PropertyField(so.FindProperty("defaultOn"), new GUIContent("Default State"));
 
+            // Global Sync vs Persistence (mutually exclusive)
+            var useGlobalSyncProp = so.FindProperty("useGlobalSync");
             var usePersistenceProp = so.FindProperty("usePersistence");
-            EditorGUILayout.PropertyField(usePersistenceProp, new GUIContent("Remember Choice"));
 
-            if (usePersistenceProp.boolValue)
+            EditorGUI.BeginChangeCheck();
+            EditorGUILayout.PropertyField(useGlobalSyncProp, new GUIContent("Global Sync", "Sync toggle state to all players"));
+            if (EditorGUI.EndChangeCheck() && useGlobalSyncProp.boolValue)
             {
-                EditorGUILayout.BeginHorizontal();
-                GUILayout.Label("Memory ID:", EditorStyles.miniLabel, GUILayout.Width(65));
-                EditorGUILayout.PropertyField(so.FindProperty("persistenceID"), GUIContent.none);
-                if (GUILayout.Button("Gen", EditorStyles.miniButton, GUILayout.Width(40)))
+                usePersistenceProp.boolValue = false;
+            }
+
+            if (useGlobalSyncProp.boolValue)
+            {
+                EditorGUILayout.HelpBox("State syncs to all players including late joiners.", MessageType.Info);
+            }
+            else
+            {
+                EditorGUI.BeginChangeCheck();
+                EditorGUILayout.PropertyField(usePersistenceProp, new GUIContent("Remember Choice", "Save state per-player"));
+                if (EditorGUI.EndChangeCheck() && usePersistenceProp.boolValue)
                 {
-                    Undo.RecordObject(toggle, "Generate New ID");
-                    toggle.persistenceID = Guid.NewGuid().ToString().Substring(0, 8);
-                    EditorUtility.SetDirty(toggle);
+                    useGlobalSyncProp.boolValue = false;
                 }
-                EditorGUILayout.EndHorizontal();
+
+                if (usePersistenceProp.boolValue)
+                {
+                    EditorGUILayout.BeginHorizontal();
+                    GUILayout.Label("Memory ID:", EditorStyles.miniLabel, GUILayout.Width(65));
+                    EditorGUILayout.PropertyField(so.FindProperty("persistenceID"), GUIContent.none);
+                    if (GUILayout.Button("Gen", EditorStyles.miniButton, GUILayout.Width(40)))
+                    {
+                        Undo.RecordObject(toggle, "Generate New ID");
+                        toggle.persistenceID = Guid.NewGuid().ToString().Substring(0, 8);
+                        EditorUtility.SetDirty(toggle);
+                    }
+                    EditorGUILayout.EndHorizontal();
+                }
             }
 
             EditorGUILayout.EndVertical();

@@ -3,15 +3,23 @@ using UdonSharp;
 using VRC.SDKBase;
 using VRC.Udon;
 
-[UdonBehaviourSyncMode(BehaviourSyncMode.None)]
+[UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
 public class StrangeCleanup : UdonSharpBehaviour
 {
     [Header("--- Configuration ---")]
     public StrangeHub hub;
+    [Tooltip("Sync reset to all players globally")]
+    public bool useGlobalSync = false;
 
     [Header("--- Audio ---")]
     public AudioSource soundSource;
     public AudioClip resetSound;
+
+    // Synced reset counter - increments each time reset is triggered
+    [UdonSynced]
+    private int _syncedResetCount;
+    private int _localResetCount;
+    private bool _hasReceivedInitialSync = false;
 
     // Stored original transforms (parallel arrays for Udon)
     private Vector3[] _originalPositions;
@@ -21,6 +29,13 @@ public class StrangeCleanup : UdonSharpBehaviour
     void Start()
     {
         CaptureOriginalTransforms();
+
+        // If we're the master (first in instance), we already have correct state
+        if (Networking.IsMaster)
+        {
+            _localResetCount = _syncedResetCount;
+            _hasReceivedInitialSync = true;
+        }
     }
 
     private void CaptureOriginalTransforms()
@@ -48,12 +63,65 @@ public class StrangeCleanup : UdonSharpBehaviour
         _initialized = true;
     }
 
+    public override void OnDeserialization()
+    {
+        if (!useGlobalSync) return;
+
+        // First sync for late joiners - just store the value, don't reset
+        if (!_hasReceivedInitialSync)
+        {
+            _localResetCount = _syncedResetCount;
+            _hasReceivedInitialSync = true;
+            return;
+        }
+
+        // Check if reset count changed (remote player triggered reset)
+        if (_syncedResetCount != _localResetCount)
+        {
+            _localResetCount = _syncedResetCount;
+            ApplyReset();
+        }
+    }
+
+    public override void OnPlayerJoined(VRCPlayerApi player)
+    {
+        if (!useGlobalSync) return;
+
+        // If we're the owner, resend state for late joiners
+        if (!player.isLocal && Networking.IsOwner(gameObject))
+        {
+            RequestSerialization();
+        }
+    }
+
     public override void Interact()
     {
         ResetAllProps();
     }
 
     public void ResetAllProps()
+    {
+        if (useGlobalSync)
+        {
+            // Take ownership and sync to all players
+            if (!Networking.IsOwner(gameObject))
+            {
+                Networking.SetOwner(Networking.LocalPlayer, gameObject);
+            }
+
+            _syncedResetCount++;
+            _localResetCount = _syncedResetCount;
+            RequestSerialization();
+            ApplyReset();
+        }
+        else
+        {
+            // Local-only reset
+            ApplyReset();
+        }
+    }
+
+    private void ApplyReset()
     {
         if (!_initialized || hub == null || hub.cleanupProps == null) return;
 

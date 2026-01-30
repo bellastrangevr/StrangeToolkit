@@ -60,8 +60,23 @@ public class StrangeCleanupEditor : Editor
 
         GUILayout.Space(10);
 
-        // --- SECTION 1: AUDIO ---
-        EditorGUILayout.LabelField("1. The Feedback (Sound)", EditorStyles.boldLabel);
+        // --- SECTION 1: OPTIONS ---
+        EditorGUILayout.LabelField("1. Options", EditorStyles.boldLabel);
+        EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+        SerializedProperty useGlobalSync = serializedObject.FindProperty("useGlobalSync");
+        EditorGUILayout.PropertyField(useGlobalSync, new GUIContent("Global Sync", "Sync reset to all players"));
+
+        if (useGlobalSync.boolValue)
+        {
+            EditorGUILayout.HelpBox("Reset syncs to all players including late joiners.", MessageType.Info);
+        }
+
+        EditorGUILayout.EndVertical();
+        GUILayout.Space(10);
+
+        // --- SECTION 2: AUDIO ---
+        EditorGUILayout.LabelField("2. The Feedback (Sound)", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
         EditorGUILayout.PropertyField(soundSource);
         if (soundSource.objectReferenceValue != null)
@@ -71,8 +86,8 @@ public class StrangeCleanupEditor : Editor
         EditorGUILayout.EndVertical();
         GUILayout.Space(10);
 
-        // --- SECTION 2: TRIGGER ---
-        EditorGUILayout.LabelField("2. The Trigger (Collider)", EditorStyles.boldLabel);
+        // --- SECTION 3: TRIGGER ---
+        EditorGUILayout.LabelField("3. The Trigger (Collider)", EditorStyles.boldLabel);
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 
         Collider existingCollider = cleanup.GetComponent<Collider>();

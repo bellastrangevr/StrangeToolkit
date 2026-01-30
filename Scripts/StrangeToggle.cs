@@ -1,9 +1,9 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UdonSharp;
 using VRC.SDKBase;
 using VRC.Udon;
 
-[UdonBehaviourSyncMode(BehaviourSyncMode.None)]
+[UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
 public class StrangeToggle : UdonSharpBehaviour
 {
     [Header("--- Configuration ---")]
@@ -11,7 +11,9 @@ public class StrangeToggle : UdonSharpBehaviour
     [Tooltip("Unique ID for saving state. MUST be unique per toggle.")]
     public string persistenceID;
     public bool usePersistence = true;
-    public bool defaultOn = true; 
+    [Tooltip("Sync toggle state to all players (mutually exclusive with persistence)")]
+    public bool useGlobalSync = false;
+    public bool defaultOn = true;
 
     [Header("--- Targets ---")]
     public GameObject[] toggleObjects;
@@ -26,24 +28,64 @@ public class StrangeToggle : UdonSharpBehaviour
     public AudioClip onSound;
     public AudioClip offSound;
 
+    // Synced state for global mode
+    [UdonSynced]
+    private bool _syncedState;
+
     private bool _isOn;
     private MaterialPropertyBlock _mpb;
 
     void Start()
     {
         _mpb = new MaterialPropertyBlock();
-        
-        // If persistence is on, try to load. Otherwise, use default.
-        if (hub != null && usePersistence)
+
+        if (useGlobalSync)
         {
+            // Global sync mode: use synced state (default starts as defaultOn)
+            _isOn = defaultOn;
+            _syncedState = defaultOn;
+        }
+        else if (hub != null && usePersistence)
+        {
+            // Persistence mode: load from player data
             _isOn = hub.LoadToggleState(persistenceID, defaultOn);
         }
         else
         {
             _isOn = defaultOn;
         }
-        
+
         UpdateVisuals();
+    }
+
+    public override void OnDeserialization()
+    {
+        if (!useGlobalSync) return;
+
+        // Remote update received - apply the synced state
+        if (_isOn != _syncedState)
+        {
+            _isOn = _syncedState;
+            UpdateVisuals();
+            PlaySound();
+        }
+    }
+
+    public override void OnPlayerJoined(VRCPlayerApi player)
+    {
+        if (!useGlobalSync) return;
+
+        // If local player joining, apply current state
+        if (player.isLocal)
+        {
+            _isOn = _syncedState;
+            UpdateVisuals();
+        }
+        // If we're the owner, resend state for late joiners
+        else if (Networking.IsOwner(gameObject))
+        {
+            RequestSerialization();
+        }
     }
 
     public override void Interact()
@@ -53,22 +95,40 @@ public class StrangeToggle : UdonSharpBehaviour
 
     public void Toggle()
     {
-        _isOn = !_isOn;
-        
-        // 1. Update Visuals locally
-        UpdateVisuals();
-        
-        // 2. Play Sound
+        if (useGlobalSync)
+        {
+            // Take ownership and sync to all players
+            if (!Networking.IsOwner(gameObject))
+            {
+                Networking.SetOwner(Networking.LocalPlayer, gameObject);
+            }
+
+            _isOn = !_isOn;
+            _syncedState = _isOn;
+            RequestSerialization();
+            UpdateVisuals();
+            PlaySound();
+        }
+        else
+        {
+            // Local toggle (with optional persistence)
+            _isOn = !_isOn;
+            UpdateVisuals();
+            PlaySound();
+
+            if (hub != null && usePersistence)
+            {
+                hub.SaveToggleState(persistenceID, _isOn);
+            }
+        }
+    }
+
+    private void PlaySound()
+    {
         if (soundSource != null)
         {
             AudioClip clip = _isOn ? onSound : offSound;
             if (clip != null) soundSource.PlayOneShot(clip);
-        }
-
-        // 3. Save State (Local Persistence)
-        if (hub != null && usePersistence)
-        {
-            hub.SaveToggleState(persistenceID, _isOn);
         }
     }
 
@@ -109,6 +169,9 @@ public class StrangeToggle : UdonSharpBehaviour
     // Called by Hub when OnPlayerRestored fires
     public void RefreshPersistence()
     {
+        // Only applies to persistence mode
+        if (useGlobalSync) return;
+
         if (hub != null && usePersistence)
         {
             bool savedState = hub.LoadToggleState(persistenceID, defaultOn);
@@ -129,10 +192,10 @@ public class StrangeToggle : UdonSharpBehaviour
             Gizmos.color = Color.cyan;
             Gizmos.DrawLine(transform.position, hub.transform.position);
         }
-        
+
         Gizmos.color = Color.yellow;
         Gizmos.DrawIcon(transform.position, "d_Toggle Icon", true);
-        
+
         // Draw lines to targets
         if (toggleObjects != null)
         {

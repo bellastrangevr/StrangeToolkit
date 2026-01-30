@@ -23,6 +23,7 @@ Track and reset pickupable objects:
 - Reset button returns all tracked objects to starting positions
 - Automatically drops held pickups before reset
 - World-space UI button creation
+- Global sync option to reset for all players
 
 ### Smart Toggles
 Interactive toggles with world-space UI support:
@@ -30,7 +31,7 @@ Interactive toggles with world-space UI support:
 - Control animator parameters
 - Change material emission colors
 - Play audio feedback
-- Persist state via the Hub
+- Global sync to all players or per-player persistence
 - Create VRChat UI toggles with checkmark indicators
 
 ### Editor Dashboard
