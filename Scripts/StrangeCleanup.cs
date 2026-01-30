@@ -11,6 +11,13 @@ public class StrangeCleanup : UdonSharpBehaviour
     [Tooltip("Sync reset to all players globally")]
     public bool useGlobalSync = false;
 
+    [Header("--- Auto Respawn ---")]
+    [Tooltip("Automatically reset objects that haven't moved for a while")]
+    public bool useAutoRespawn = false;
+    [Tooltip("Minutes of inactivity before auto-respawn (per object)")]
+    [Range(1, 60)]
+    public float autoRespawnMinutes = 5f;
+
     [Header("--- Audio ---")]
     public AudioSource soundSource;
     public AudioClip resetSound;
@@ -26,6 +33,11 @@ public class StrangeCleanup : UdonSharpBehaviour
     private Quaternion[] _originalRotations;
     private bool _initialized = false;
 
+    // Auto-respawn tracking (per object)
+    private Vector3[] _lastKnownPositions;
+    private float[] _lastMovedTimes;
+    private const float POSITION_THRESHOLD = 0.01f; // Min movement to count as "touched"
+
     void Start()
     {
         CaptureOriginalTransforms();
@@ -35,6 +47,30 @@ public class StrangeCleanup : UdonSharpBehaviour
         {
             _localResetCount = _syncedResetCount;
             _hasReceivedInitialSync = true;
+        }
+
+        // Initialize auto-respawn tracking
+        if (useAutoRespawn && _initialized)
+        {
+            InitializeAutoRespawn();
+        }
+    }
+
+    private void InitializeAutoRespawn()
+    {
+        int count = hub.cleanupProps.Length;
+        _lastKnownPositions = new Vector3[count];
+        _lastMovedTimes = new float[count];
+
+        float currentTime = Time.time;
+        for (int i = 0; i < count; i++)
+        {
+            GameObject prop = hub.cleanupProps[i];
+            if (prop != null)
+            {
+                _lastKnownPositions[i] = prop.transform.position;
+                _lastMovedTimes[i] = currentTime;
+            }
         }
     }
 
@@ -61,6 +97,85 @@ public class StrangeCleanup : UdonSharpBehaviour
         }
 
         _initialized = true;
+    }
+
+    private void Update()
+    {
+        if (!useAutoRespawn || !_initialized || _lastKnownPositions == null) return;
+
+        // Only master handles auto-respawn to avoid conflicts
+        if (!Networking.IsMaster) return;
+
+        float currentTime = Time.time;
+        float timeoutSeconds = autoRespawnMinutes * 60f;
+
+        for (int i = 0; i < hub.cleanupProps.Length; i++)
+        {
+            GameObject prop = hub.cleanupProps[i];
+            if (prop == null || i >= _lastKnownPositions.Length) continue;
+
+            Vector3 currentPos = prop.transform.position;
+
+            // Check if object has moved since last check
+            if (Vector3.Distance(currentPos, _lastKnownPositions[i]) > POSITION_THRESHOLD)
+            {
+                // Object moved - update tracking
+                _lastKnownPositions[i] = currentPos;
+                _lastMovedTimes[i] = currentTime;
+            }
+            else
+            {
+                // Check if object is not at spawn and has timed out
+                bool isAtSpawn = Vector3.Distance(currentPos, _originalPositions[i]) < POSITION_THRESHOLD;
+                bool hasTimedOut = (currentTime - _lastMovedTimes[i]) >= timeoutSeconds;
+
+                if (!isAtSpawn && hasTimedOut)
+                {
+                    // Auto-respawn this single object
+                    RespawnSingleProp(i);
+                    _lastMovedTimes[i] = currentTime;
+                }
+            }
+        }
+    }
+
+    private void RespawnSingleProp(int index)
+    {
+        if (index < 0 || index >= hub.cleanupProps.Length) return;
+
+        GameObject prop = hub.cleanupProps[index];
+        if (prop == null || index >= _originalPositions.Length) return;
+
+        // Take ownership if needed
+        if (!Networking.IsOwner(prop))
+        {
+            Networking.SetOwner(Networking.LocalPlayer, prop);
+        }
+
+        // Check if VRCPickup exists and drop it first
+        var pickup = (VRC_Pickup)prop.GetComponent(typeof(VRC_Pickup));
+        if (pickup != null)
+        {
+            pickup.Drop();
+        }
+
+        // Reset transform
+        prop.transform.position = _originalPositions[index];
+        prop.transform.rotation = _originalRotations[index];
+
+        // Reset Rigidbody velocity if present
+        var rb = prop.GetComponent<Rigidbody>();
+        if (rb != null)
+        {
+            rb.velocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+        }
+
+        // Update tracking position to spawn position
+        if (_lastKnownPositions != null && index < _lastKnownPositions.Length)
+        {
+            _lastKnownPositions[index] = _originalPositions[index];
+        }
     }
 
     public override void OnDeserialization()

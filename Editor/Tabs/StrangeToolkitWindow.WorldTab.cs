@@ -366,11 +366,19 @@ namespace StrangeToolkit
 
                     if (removeIndex >= 0)
                     {
+                        GameObject removedProp = hub.cleanupProps[removeIndex];
+
                         Undo.RecordObject(hub, "Remove Prop from Cleanup");
                         var list = new List<GameObject>(hub.cleanupProps);
                         list.RemoveAt(removeIndex);
                         hub.cleanupProps = list.ToArray();
                         EditorUtility.SetDirty(hub);
+
+                        // Remove VRCObjectSync if Global Sync was enabled
+                        if (existingCleanup != null && existingCleanup.useGlobalSync && removedProp != null)
+                        {
+                            RemoveObjectSyncFromProp(removedProp);
+                        }
                     }
 
                     GUILayout.Space(5);
@@ -380,19 +388,26 @@ namespace StrangeToolkit
                 {
                     Undo.RecordObject(hub, "Add Props to Cleanup");
                     List<GameObject> props = new List<GameObject>(hub.cleanupProps ?? new GameObject[0]);
-                    int addedCount = 0;
+                    List<GameObject> newlyAdded = new List<GameObject>();
                     foreach (GameObject go in Selection.gameObjects)
                     {
                         if (!props.Contains(go))
                         {
                             props.Add(go);
-                            addedCount++;
+                            newlyAdded.Add(go);
                         }
                     }
                     hub.cleanupProps = props.ToArray();
                     EditorUtility.SetDirty(hub);
-                    if (addedCount > 0)
-                        StrangeToolkitLogger.LogSuccess($"Added {addedCount} object(s) to cleanup list");
+
+                    // If Global Sync is enabled, add VRCObjectSync to newly added objects
+                    if (newlyAdded.Count > 0 && existingCleanup != null && existingCleanup.useGlobalSync)
+                    {
+                        AddObjectSyncToProps(newlyAdded);
+                    }
+
+                    if (newlyAdded.Count > 0)
+                        StrangeToolkitLogger.LogSuccess($"Added {newlyAdded.Count} object(s) to cleanup list");
                     else if (Selection.gameObjects.Length == 0)
                         StrangeToolkitLogger.LogWarning("No objects selected. Select objects in the Hierarchy first.");
                     else
@@ -427,6 +442,49 @@ namespace StrangeToolkit
             Undo.RegisterCreatedObjectUndo(go, "Create Cleanup Button");
             Selection.activeGameObject = go;
             StrangeToolkitLogger.LogSuccess("Created Cleanup Button in scene");
+        }
+
+        private void AddObjectSyncToProps(List<GameObject> props)
+        {
+            // Find VRCObjectSync type
+            System.Type objectSyncType = null;
+            foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies())
+            {
+                objectSyncType = assembly.GetType("VRC.SDK3.Components.VRCObjectSync");
+                if (objectSyncType != null) break;
+            }
+
+            if (objectSyncType == null) return;
+
+            foreach (GameObject prop in props)
+            {
+                if (prop == null) continue;
+                if (prop.GetComponent(objectSyncType) == null)
+                {
+                    Undo.AddComponent(prop, objectSyncType);
+                }
+            }
+        }
+
+        private void RemoveObjectSyncFromProp(GameObject prop)
+        {
+            if (prop == null) return;
+
+            // Find VRCObjectSync type
+            System.Type objectSyncType = null;
+            foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies())
+            {
+                objectSyncType = assembly.GetType("VRC.SDK3.Components.VRCObjectSync");
+                if (objectSyncType != null) break;
+            }
+
+            if (objectSyncType == null) return;
+
+            Component existingSync = prop.GetComponent(objectSyncType);
+            if (existingSync != null)
+            {
+                Undo.DestroyObjectImmediate(existingSync);
+            }
         }
 
         private void DrawExternalToolsSection()

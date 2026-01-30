@@ -65,11 +65,32 @@ public class StrangeCleanupEditor : Editor
         EditorGUILayout.BeginVertical(EditorStyles.helpBox);
 
         SerializedProperty useGlobalSync = serializedObject.FindProperty("useGlobalSync");
+        EditorGUI.BeginChangeCheck();
         EditorGUILayout.PropertyField(useGlobalSync, new GUIContent("Global Sync", "Sync reset to all players"));
+        if (EditorGUI.EndChangeCheck())
+        {
+            serializedObject.ApplyModifiedProperties();
+            UpdateObjectSyncComponents(cleanup, useGlobalSync.boolValue);
+        }
 
         if (useGlobalSync.boolValue)
         {
-            EditorGUILayout.HelpBox("Reset syncs to all players including late joiners.", MessageType.Info);
+            EditorGUILayout.HelpBox("Reset syncs to all players. VRC Object Sync added to tracked objects.", MessageType.Info);
+        }
+
+        GUILayout.Space(5);
+
+        // Auto Respawn
+        SerializedProperty useAutoRespawn = serializedObject.FindProperty("useAutoRespawn");
+        EditorGUILayout.PropertyField(useAutoRespawn, new GUIContent("Auto Respawn", "Automatically reset idle objects"));
+
+        if (useAutoRespawn.boolValue)
+        {
+            EditorGUI.indentLevel++;
+            SerializedProperty autoRespawnMinutes = serializedObject.FindProperty("autoRespawnMinutes");
+            EditorGUILayout.PropertyField(autoRespawnMinutes, new GUIContent("Idle Time (minutes)", "Reset objects after this many minutes of not being moved"));
+            EditorGUI.indentLevel--;
+            EditorGUILayout.HelpBox("Objects will auto-reset if untouched for the specified time. Only master player handles this.", MessageType.Info);
         }
 
         EditorGUILayout.EndVertical();
@@ -213,6 +234,52 @@ public class StrangeCleanupEditor : Editor
         MeshCollider collider = Undo.AddComponent<MeshCollider>(cleanup.gameObject);
         collider.convex = true;
         collider.isTrigger = true;
+    }
+
+    private void UpdateObjectSyncComponents(StrangeCleanup cleanup, bool addSync)
+    {
+        if (cleanup.hub == null || cleanup.hub.cleanupProps == null) return;
+
+        // Find VRCObjectSync type
+        System.Type objectSyncType = null;
+        foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies())
+        {
+            objectSyncType = assembly.GetType("VRC.SDK3.Components.VRCObjectSync");
+            if (objectSyncType != null) break;
+        }
+
+        if (objectSyncType == null)
+        {
+            Debug.LogWarning("[StrangeToolkit] VRCObjectSync type not found. Is VRChat SDK installed?");
+            return;
+        }
+
+        int modifiedCount = 0;
+        foreach (GameObject prop in cleanup.hub.cleanupProps)
+        {
+            if (prop == null) continue;
+
+            Component existingSync = prop.GetComponent(objectSyncType);
+
+            if (addSync && existingSync == null)
+            {
+                // Add VRCObjectSync
+                Undo.AddComponent(prop, objectSyncType);
+                modifiedCount++;
+            }
+            else if (!addSync && existingSync != null)
+            {
+                // Remove VRCObjectSync
+                Undo.DestroyObjectImmediate(existingSync);
+                modifiedCount++;
+            }
+        }
+
+        if (modifiedCount > 0)
+        {
+            string action = addSync ? "Added" : "Removed";
+            Debug.Log($"[StrangeToolkit] {action} VRCObjectSync on {modifiedCount} tracked object(s)");
+        }
     }
 
     private void InitStyles()

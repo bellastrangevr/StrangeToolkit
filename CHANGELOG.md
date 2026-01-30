@@ -10,6 +10,7 @@
   - Resets Rigidbody velocities
   - Audio feedback support
   - Custom inspector with collider management and UI button creation
+  - **Auto Respawn** - Automatically reset objects after configurable idle time (1-60 minutes)
 - **Object Auto-Cleanup Section** (World Tab)
   - Track loose objects (pickupables) for cleanup
   - List tracked objects with Sel/X buttons
@@ -20,6 +21,7 @@
   - Reset action syncs to all players
   - Mutually exclusive with persistence (per-player) mode
   - Manual sync mode with ownership transfer
+  - Automatic VRCObjectSync component management on tracked cleanup objects
 - **UI Button/Toggle Creation**
   - "Add UI Toggle" button creates world-space VRChat UI with checkmark
   - "Add UI Button" for cleanup reset buttons
