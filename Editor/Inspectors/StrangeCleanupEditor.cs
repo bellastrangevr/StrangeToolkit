@@ -90,7 +90,15 @@ public class StrangeCleanupEditor : Editor
             SerializedProperty autoRespawnMinutes = serializedObject.FindProperty("autoRespawnMinutes");
             EditorGUILayout.PropertyField(autoRespawnMinutes, new GUIContent("Idle Time (minutes)", "Reset objects after this many minutes of not being moved"));
             EditorGUI.indentLevel--;
-            EditorGUILayout.HelpBox("Objects will auto-reset if untouched for the specified time. Only master player handles this.", MessageType.Info);
+
+            if (useGlobalSync.boolValue)
+            {
+                EditorGUILayout.HelpBox("Master handles timing, VRCObjectSync syncs position to all players.", MessageType.Info);
+            }
+            else
+            {
+                EditorGUILayout.HelpBox("Each player runs their own timer. Resets are local only.", MessageType.Info);
+            }
         }
 
         EditorGUILayout.EndVertical();

@@ -103,8 +103,9 @@ public class StrangeCleanup : UdonSharpBehaviour
     {
         if (!useAutoRespawn || !_initialized || _lastKnownPositions == null) return;
 
-        // Only master handles auto-respawn to avoid conflicts
-        if (!Networking.IsMaster) return;
+        // With Global Sync: only master handles auto-respawn (VRCObjectSync syncs position)
+        // Without Global Sync: each player runs their own timer (local reset only)
+        if (useGlobalSync && !Networking.IsMaster) return;
 
         float currentTime = Time.time;
         float timeoutSeconds = autoRespawnMinutes * 60f;
