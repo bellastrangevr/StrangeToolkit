@@ -7,14 +7,15 @@ using VRC.Udon;
 public class StrangeCleanup : UdonSharpBehaviour
 {
     [Header("--- Configuration ---")]
-    public StrangeHub hub;
+    [Tooltip("Objects to reset when cleanup is triggered")]
+    public GameObject[] cleanupProps;
     [Tooltip("Sync reset to all players globally")]
     public bool useGlobalSync = false;
 
     [Header("--- Auto Respawn ---")]
-    [Tooltip("Automatically reset objects that haven't moved for a while")]
+    [Tooltip("Automatically reset objects after they've been idle (not held) for a while")]
     public bool useAutoRespawn = false;
-    [Tooltip("Minutes of inactivity before auto-respawn (per object)")]
+    [Tooltip("Minutes after dropping before auto-respawn (per object)")]
     [Range(1, 60)]
     public float autoRespawnMinutes = 5f;
 
@@ -34,9 +35,11 @@ public class StrangeCleanup : UdonSharpBehaviour
     private bool _initialized = false;
 
     // Auto-respawn tracking (per object)
-    private Vector3[] _lastKnownPositions;
-    private float[] _lastMovedTimes;
-    private const float POSITION_THRESHOLD = 0.01f; // Min movement to count as "touched"
+    private float[] _lastDroppedTimes;
+    private bool[] _wasHeldLastFrame;
+    private VRC_Pickup[] _pickupCache;
+    private const float POSITION_THRESHOLD = 0.01f; // Min distance to consider "at spawn"
+    private const float CHECK_INTERVAL = 0.5f; // Seconds between auto-respawn checks
 
     void Start()
     {
@@ -53,42 +56,48 @@ public class StrangeCleanup : UdonSharpBehaviour
         if (useAutoRespawn && _initialized)
         {
             InitializeAutoRespawn();
+            SendCustomEventDelayedSeconds(nameof(_CheckAutoRespawn), CHECK_INTERVAL);
         }
     }
 
     private void InitializeAutoRespawn()
     {
-        int count = hub.cleanupProps.Length;
-        _lastKnownPositions = new Vector3[count];
-        _lastMovedTimes = new float[count];
+        if (cleanupProps == null) return;
+        int count = cleanupProps.Length;
+        _lastDroppedTimes = new float[count];
+        _wasHeldLastFrame = new bool[count];
+        _pickupCache = new VRC_Pickup[count];
 
         float currentTime = Time.time;
         for (int i = 0; i < count; i++)
         {
-            GameObject prop = hub.cleanupProps[i];
+            _lastDroppedTimes[i] = currentTime;
+            _wasHeldLastFrame[i] = false;
+
+            // Cache pickup component reference
+            GameObject prop = cleanupProps[i];
             if (prop != null)
             {
-                _lastKnownPositions[i] = prop.transform.position;
-                _lastMovedTimes[i] = currentTime;
+                _pickupCache[i] = (VRC_Pickup)prop.GetComponent(typeof(VRC_Pickup));
             }
         }
     }
 
     private void CaptureOriginalTransforms()
     {
-        if (hub == null || hub.cleanupProps == null)
+        if (cleanupProps == null || cleanupProps.Length == 0)
         {
             _initialized = false;
             return;
         }
 
-        int count = hub.cleanupProps.Length;
+        int count = cleanupProps.Length;
         _originalPositions = new Vector3[count];
         _originalRotations = new Quaternion[count];
 
         for (int i = 0; i < count; i++)
         {
-            GameObject prop = hub.cleanupProps[i];
+            GameObject prop = cleanupProps[i];
             if (prop != null)
             {
                 _originalPositions[i] = prop.transform.position;
@@ -99,52 +108,66 @@ public class StrangeCleanup : UdonSharpBehaviour
         _initialized = true;
     }
 
-    private void Update()
+    public void _CheckAutoRespawn()
     {
-        if (!useAutoRespawn || !_initialized || _lastKnownPositions == null) return;
+        if (!useAutoRespawn || !_initialized || _lastDroppedTimes == null) return;
 
         // With Global Sync: only master handles auto-respawn (VRCObjectSync syncs position)
         // Without Global Sync: each player runs their own timer (local reset only)
-        if (useGlobalSync && !Networking.IsMaster) return;
+        if (useGlobalSync && !Networking.IsMaster)
+        {
+            SendCustomEventDelayedSeconds(nameof(_CheckAutoRespawn), CHECK_INTERVAL);
+            return;
+        }
 
         float currentTime = Time.time;
         float timeoutSeconds = autoRespawnMinutes * 60f;
 
-        for (int i = 0; i < hub.cleanupProps.Length; i++)
+        for (int i = 0; i < cleanupProps.Length; i++)
         {
-            GameObject prop = hub.cleanupProps[i];
-            if (prop == null || i >= _lastKnownPositions.Length) continue;
+            GameObject prop = cleanupProps[i];
+            if (prop == null || i >= _lastDroppedTimes.Length) continue;
+
+            // Check if pickup is currently held (using cached reference)
+            bool isHeld = false;
+            if (_pickupCache != null && i < _pickupCache.Length && _pickupCache[i] != null)
+            {
+                isHeld = _pickupCache[i].IsHeld;
+            }
+
+            // Detect drop event (was held, now not held) - reset timer
+            if (_wasHeldLastFrame[i] && !isHeld)
+            {
+                _lastDroppedTimes[i] = currentTime;
+            }
+            _wasHeldLastFrame[i] = isHeld;
+
+            // Skip respawn check if currently held
+            if (isHeld) continue;
 
             Vector3 currentPos = prop.transform.position;
 
-            // Check if object has moved since last check
-            if (Vector3.Distance(currentPos, _lastKnownPositions[i]) > POSITION_THRESHOLD)
-            {
-                // Object moved - update tracking
-                _lastKnownPositions[i] = currentPos;
-                _lastMovedTimes[i] = currentTime;
-            }
-            else
-            {
-                // Check if object is not at spawn and has timed out
-                bool isAtSpawn = Vector3.Distance(currentPos, _originalPositions[i]) < POSITION_THRESHOLD;
-                bool hasTimedOut = (currentTime - _lastMovedTimes[i]) >= timeoutSeconds;
+            // Check if object is not at spawn and has timed out since last drop
+            bool isAtSpawn = Vector3.Distance(currentPos, _originalPositions[i]) < POSITION_THRESHOLD;
+            bool hasTimedOut = (currentTime - _lastDroppedTimes[i]) >= timeoutSeconds;
 
-                if (!isAtSpawn && hasTimedOut)
-                {
-                    // Auto-respawn this single object
-                    RespawnSingleProp(i);
-                    _lastMovedTimes[i] = currentTime;
-                }
+            if (!isAtSpawn && hasTimedOut)
+            {
+                // Auto-respawn this object (even if still moving)
+                RespawnSingleProp(i);
+                _lastDroppedTimes[i] = currentTime;
             }
         }
+
+        // Schedule next check
+        SendCustomEventDelayedSeconds(nameof(_CheckAutoRespawn), CHECK_INTERVAL);
     }
 
     private void RespawnSingleProp(int index)
     {
-        if (index < 0 || index >= hub.cleanupProps.Length) return;
+        if (index < 0 || index >= cleanupProps.Length) return;
 
-        GameObject prop = hub.cleanupProps[index];
+        GameObject prop = cleanupProps[index];
         if (prop == null || index >= _originalPositions.Length) return;
 
         // Take ownership if needed
@@ -172,10 +195,10 @@ public class StrangeCleanup : UdonSharpBehaviour
             rb.angularVelocity = Vector3.zero;
         }
 
-        // Update tracking position to spawn position
-        if (_lastKnownPositions != null && index < _lastKnownPositions.Length)
+        // Reset drop time after respawn
+        if (_lastDroppedTimes != null && index < _lastDroppedTimes.Length)
         {
-            _lastKnownPositions[index] = _originalPositions[index];
+            _lastDroppedTimes[index] = Time.time;
         }
     }
 
@@ -239,12 +262,12 @@ public class StrangeCleanup : UdonSharpBehaviour
 
     private void ApplyReset()
     {
-        if (!_initialized || hub == null || hub.cleanupProps == null) return;
+        if (!_initialized || cleanupProps == null) return;
 
         int resetCount = 0;
-        for (int i = 0; i < hub.cleanupProps.Length; i++)
+        for (int i = 0; i < cleanupProps.Length; i++)
         {
-            GameObject prop = hub.cleanupProps[i];
+            GameObject prop = cleanupProps[i];
             if (prop != null && i < _originalPositions.Length)
             {
                 // Check if VRCPickup exists and drop it first
@@ -281,21 +304,14 @@ public class StrangeCleanup : UdonSharpBehaviour
 #if UNITY_EDITOR
     private void OnDrawGizmos()
     {
-        // Visual Gizmo: Line connecting this to the Hub
-        if (hub != null)
-        {
-            Gizmos.color = Color.magenta;
-            Gizmos.DrawLine(transform.position, hub.transform.position);
-        }
-
         Gizmos.color = Color.magenta;
         Gizmos.DrawIcon(transform.position, "d_Refresh", true);
 
         // Draw lines to cleanup props
-        if (hub != null && hub.cleanupProps != null)
+        if (cleanupProps != null)
         {
             Gizmos.color = new Color(1f, 0.5f, 1f, 0.5f);
-            foreach (GameObject prop in hub.cleanupProps)
+            foreach (GameObject prop in cleanupProps)
             {
                 if (prop != null)
                     Gizmos.DrawLine(transform.position, prop.transform.position);

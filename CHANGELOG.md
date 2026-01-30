@@ -3,19 +3,28 @@
 ## [2.0.0] - 2026-01-31
 
 ### Added
-- **StrangeCleanup** - New UdonSharp component for resetting pickupable objects
+- **StrangeCleanup** - UdonSharp component for resetting pickupable objects
+  - **Multiple cleanup groups** - Create separate reset buttons for different object sets
+  - Each cleanup group manages its own tracked objects independently
   - Captures original positions/rotations on world load
   - Reset button returns all tracked objects to their starting positions
   - Automatically drops held pickups before reset
   - Resets Rigidbody velocities
   - Audio feedback support
-  - Custom inspector with collider management and UI button creation
+  - Custom inspector with tracked objects management, collider controls, and UI button creation
   - **Auto Respawn** - Automatically reset objects after configurable idle time (1-60 minutes)
+    - Timer starts when object is dropped (not when it stops moving)
+    - Objects respawn even if still in motion
+    - Interval-based checking (0.5s) for performance optimization
+    - Cached pickup references to avoid per-check GetComponent calls
 - **Object Auto-Cleanup Section** (World Tab)
-  - Track loose objects (pickupables) for cleanup
-  - List tracked objects with Sel/X buttons
-  - Auto-cleanup of null references when objects are deleted
-  - Reset Button status with Create button
+  - Lists all cleanup groups in scene with object counts
+  - Shows Global Sync status indicator per group
+  - Create new cleanup groups with one click
+- **Linked Cleanup Groups** (StrangeHub Inspector)
+  - Shows all cleanup groups in scene alongside Smart Toggles
+  - Displays object count and sync status per group
+  - Clickable names to select cleanup buttons
 - **Global Sync** for StrangeToggle and StrangeCleanup
   - Toggle state syncs to all players including late joiners
   - Reset action syncs to all players
@@ -86,6 +95,15 @@
 - Bakery window integration improvements
 - Quest Converter transform synchronization for objects with duplicate names (Queue-based matching)
 - Duplicate method definitions in `StrangeToolkitWindow`
+- Potential null reference in `StrangeCleanup.InitializeAutoRespawn()`
+- Missing Undo support for post-processing removal in Quest Converter
+- Deprecated `FindObjectsOfType` calls updated to `FindObjectsByType`
+- Exception logging added for material blacklist loading failures
+- Reflection caching in PhysBones auditor (performance optimization)
+- Magic numbers replaced with named constants in PhysBones auditor (thresholds, UI sizing)
+- Magic numbers replaced with named constants in Quest Converter
+- Empty catch blocks now explicitly catch `System.Exception`
+- Removed unused imports in Quest Converter
 
 ## [1.2.1] - 2026-01-30
 
