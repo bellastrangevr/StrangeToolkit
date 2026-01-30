@@ -55,6 +55,8 @@
   - Reorganized Smart Toggle expanded settings into 4 sections (Action, Feedback, Brain, Trigger)
   - Add/Remove UI Toggle buttons
   - Prefab instance handling with "Unpack Prefab" option
+- **Static Batching Tooltips** (Auditor Tab)
+  - Tooltip warning when switching from static to dynamic about baked lighting implications
 
 ### Changed
 - **Major Editor Reorganization** - Complete restructure into subfolders:

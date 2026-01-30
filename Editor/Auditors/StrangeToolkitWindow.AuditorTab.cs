@@ -189,7 +189,10 @@ namespace StrangeToolkit
                     Color btnColor = isFullyStatic ? Color.green : new Color(1f, 0.4f, 0.4f);
 
                     GUI.backgroundColor = btnColor;
-                    if (GUILayout.Button(btnText, GUILayout.Width(80)))
+                    string tooltip = isFullyStatic
+                        ? "Switch to Dynamic. Warning: If you have baked lighting, this object may appear differently as it will no longer receive baked lightmaps."
+                        : "Switch to Static (enables static batching and baked lighting)";
+                    if (GUILayout.Button(new GUIContent(btnText, tooltip), GUILayout.Width(80)))
                     {
                         Undo.RecordObject(entry.obj, "Toggle Static");
                         if (isFullyStatic)
