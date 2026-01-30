@@ -6,6 +6,42 @@
   "packages": {
     "com.bellastrangevr.strangetoolkit": {
       "versions": {
+        "1.2.1": {
+          "name": "com.bellastrangevr.strangetoolkit",
+          "displayName": "Strange Toolkit",
+          "version": "1.2.1",
+          "description": "VRChat world toolkit with atmosphere presets, smart toggles, world auditing, and optimization tools",
+          "author": {
+            "name": "bellastrangevr"
+          },
+          "vpmDependencies": {
+            "com.vrchat.worlds": ">=3.9.0"
+          },
+          "legacyFolders": {
+            "Assets/StrangeToolkit": ""
+          },
+          "legacyFiles": {},
+          "type": "tool",
+          "url": "https://github.com/bellastrangevr/StrangeToolkit/releases/download/v1.2.1/StrangeToolkit_v1.2.1_VPM.zip"
+        },
+        "1.2.0": {
+          "name": "com.bellastrangevr.strangetoolkit",
+          "displayName": "Strange Toolkit",
+          "version": "1.2.0",
+          "description": "VRChat world toolkit with atmosphere presets, smart toggles, world auditing, and optimization tools",
+          "author": {
+            "name": "bellastrangevr"
+          },
+          "vpmDependencies": {
+            "com.vrchat.worlds": ">=3.9.0"
+          },
+          "legacyFolders": {
+            "Assets/StrangeToolkit": ""
+          },
+          "legacyFiles": {},
+          "type": "tool",
+          "url": "https://github.com/bellastrangevr/StrangeToolkit/releases/download/v1.2.0/StrangeToolkit_v1.2.0_VPM.zip"
+        },
         "1.1.0": {
           "name": "com.bellastrangevr.strangetoolkit",
           "displayName": "Strange Toolkit",
