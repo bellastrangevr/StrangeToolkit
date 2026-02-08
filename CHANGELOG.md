@@ -9,6 +9,7 @@
   - Built-in sync for Unity video players (master-driven timestamp sync)
   - AudioLink integration with automatic wiring
   - Custom inspector with Dashboard quick-access button
+  - In-editor video playback via AVPro shim (play mode URL resolution with yt-dlp)
 - **Video Workflow Section** (Visuals Tab)
   - Video player dropdown with one-click prefab instantiation
   - Smart status panel with progressive status rows and auto-wiring
