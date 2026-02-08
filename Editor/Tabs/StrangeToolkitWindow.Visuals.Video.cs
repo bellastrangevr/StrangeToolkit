@@ -64,6 +64,16 @@ namespace StrangeToolkit
             if (GUILayout.Button(new GUIContent("GitHub", "Source code, documentation, and setup instructions.")))
                 Application.OpenURL("https://github.com/EllyVR/VRCVideoCacher");
             EditorGUILayout.EndHorizontal();
+
+            GUILayout.Space(3);
+            GUILayout.Label("Enhanced Fork", EditorStyles.miniBoldLabel);
+            EditorGUILayout.HelpBox(
+                "Fynn's fork adds video thumbnails, batch pre-caching, " +
+                "custom domain caching, and cookie management for logged-in YouTube playback.",
+                MessageType.None);
+            if (GUILayout.Button(new GUIContent("Fynn's Fork (GitHub)", "Enhanced fork with GUI, pre-caching, Resonite support, and more.")))
+                Application.OpenURL("https://github.com/Fynn9563/VRCVideoCacher");
+
             EditorGUILayout.EndVertical();
         }
 
