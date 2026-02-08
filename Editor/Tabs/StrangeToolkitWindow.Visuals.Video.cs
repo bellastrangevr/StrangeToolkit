@@ -54,61 +54,69 @@ namespace StrangeToolkit
             // Build list of available player types
             var playerNames = new List<string>();
             var playerIds = new List<string>();
+            var playerDescriptions = new List<string>();
 
             if (StrangeProTV.IsInstalled)
             {
                 playerNames.Add("ProTV");
                 playerIds.Add("protv");
+                playerDescriptions.Add("Choose this for big theatrical spaces or event worlds where you want polished controls, playlist features and strong host/admin command support.");
             }
 
             if (StrangeIwaSync3.IsInstalled)
             {
                 playerNames.Add("iwaSync3");
                 playerIds.Add("iwasync3");
+                playerDescriptions.Add("Use this when performance matters and you just need synced playback, lightweight and efficient for simpler worlds or mobile/VRChat performance targets.");
             }
 
             if (StrangeUSharpVideo.IsInstalled)
             {
                 playerNames.Add("USharpVideo");
                 playerIds.Add("usharpvideo");
+                playerDescriptions.Add("Best if you want straightforward video support with minimal fuss, easy to set up and low overhead, ideal for basic screens and small worlds.");
             }
 
             if (StrangeVizVid.IsInstalled)
             {
                 playerNames.Add("VizVid");
                 playerIds.Add("vizvid");
+                playerDescriptions.Add("Good choice for community spaces with mixed media needs, watch together features and modular design, lets you build custom video areas without heavy scripting.");
             }
 
             if (StrangeYamaPlayer.IsInstalled)
             {
                 playerNames.Add("Yama Player");
                 playerIds.Add("yamaplayer");
+                playerDescriptions.Add("Perfect for worlds where users expect advanced UI, playlists, queues and streaming support, great for lounges, bars or social hubs with lots of video interaction.");
             }
 
             if (StrangeVideoTXL.IsInstalled)
             {
                 playerNames.Add("VideoTXL");
                 playerIds.Add("videotxl");
+                playerDescriptions.Add("Great for worlds that need solid synced playback with flexible control options, good when you want reliable group watching without heavy performance cost.");
             }
 
             playerNames.Add("Unity Built-in");
             playerIds.Add("unity");
+            playerDescriptions.Add("Basic Unity video player. A third-party player is recommended for better format support and sync.");
 
             // Show install hints for missing players
             if (!StrangeProTV.IsInstalled && !StrangeIwaSync3.IsInstalled && !StrangeUSharpVideo.IsInstalled && !StrangeVizVid.IsInstalled && !StrangeYamaPlayer.IsInstalled && !StrangeVideoTXL.IsInstalled)
             {
                 EditorGUILayout.HelpBox("A third-party video player is strongly recommended over the built-in Unity player for better format support and performance.", MessageType.Warning);
                 EditorGUILayout.BeginHorizontal();
-                if (GUILayout.Button("Get ProTV")) Application.OpenURL(StrangeProTV.GetUrl);
-                if (GUILayout.Button("Get iwaSync3")) Application.OpenURL(StrangeIwaSync3.GetUrl);
+                if (GUILayout.Button(new GUIContent("Get ProTV", "Big theatrical spaces or event worlds with polished controls, playlists, and host/admin support."))) Application.OpenURL(StrangeProTV.GetUrl);
+                if (GUILayout.Button(new GUIContent("Get iwaSync3", "Lightweight and efficient synced playback for simpler worlds or mobile/VRChat performance targets."))) Application.OpenURL(StrangeIwaSync3.GetUrl);
                 EditorGUILayout.EndHorizontal();
                 EditorGUILayout.BeginHorizontal();
-                if (GUILayout.Button("Get USharpVideo")) Application.OpenURL(StrangeUSharpVideo.GetUrl);
-                if (GUILayout.Button("Get VizVid")) Application.OpenURL(StrangeVizVid.GetUrl);
+                if (GUILayout.Button(new GUIContent("Get USharpVideo", "Straightforward video with minimal setup, low overhead, ideal for basic screens and small worlds."))) Application.OpenURL(StrangeUSharpVideo.GetUrl);
+                if (GUILayout.Button(new GUIContent("Get VizVid", "Community spaces with mixed media needs, watch together features, and modular design."))) Application.OpenURL(StrangeVizVid.GetUrl);
                 EditorGUILayout.EndHorizontal();
                 EditorGUILayout.BeginHorizontal();
-                if (GUILayout.Button("Get Yama Player")) Application.OpenURL(StrangeYamaPlayer.GetUrl);
-                if (GUILayout.Button("Get VideoTXL")) Application.OpenURL(StrangeVideoTXL.GetUrl);
+                if (GUILayout.Button(new GUIContent("Get Yama Player", "Advanced UI with playlists, queues, and streaming support for lounges, bars, or social hubs."))) Application.OpenURL(StrangeYamaPlayer.GetUrl);
+                if (GUILayout.Button(new GUIContent("Get VideoTXL", "Solid synced playback with flexible control options for reliable group watching."))) Application.OpenURL(StrangeVideoTXL.GetUrl);
                 EditorGUILayout.EndHorizontal();
                 GUILayout.Space(5);
             }
@@ -124,6 +132,12 @@ namespace StrangeToolkit
             }
             GUI.backgroundColor = Color.white;
             EditorGUILayout.EndHorizontal();
+
+            // Show description for selected player
+            if (_selectedPlayerType >= 0 && _selectedPlayerType < playerDescriptions.Count)
+            {
+                EditorGUILayout.HelpBox(playerDescriptions[_selectedPlayerType], MessageType.Info);
+            }
 
             GUILayout.Space(5);
 
