@@ -41,8 +41,29 @@ namespace StrangeToolkit
                 DrawAudioLinkSetupCard();
                 GUILayout.Space(5);
                 DrawSatelliteScreenTool();
+                GUILayout.Space(5);
+                DrawVideoCacherCard();
             }
 
+            EditorGUILayout.EndVertical();
+        }
+
+        private void DrawVideoCacherCard()
+        {
+            EditorGUILayout.BeginVertical(_listItemStyle);
+            GUILayout.Label("Recommended: VRCVideoCacher", EditorStyles.boldLabel);
+            EditorGUILayout.HelpBox(
+                "VRCVideoCacher caches videos to local disk and fixes YouTube loading failures. " +
+                "It improves playback reliability by working around bot detection, auto-installs missing codecs (VP9, AV1), " +
+                "and speeds up repeat playback. Recommended for all VRChat users experiencing video issues.",
+                MessageType.Info);
+
+            EditorGUILayout.BeginHorizontal();
+            if (GUILayout.Button(new GUIContent("Get on Steam", "Free on Steam — works with VRChat and Resonite.")))
+                Application.OpenURL("https://store.steampowered.com/app/4296960/VRCVideoCacher/");
+            if (GUILayout.Button(new GUIContent("GitHub", "Source code, documentation, and setup instructions.")))
+                Application.OpenURL("https://github.com/EllyVR/VRCVideoCacher");
+            EditorGUILayout.EndHorizontal();
             EditorGUILayout.EndVertical();
         }
 
