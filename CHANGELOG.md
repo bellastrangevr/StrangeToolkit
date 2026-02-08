@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.1.0] - 2026-02-09
+
+### Added
+- **StrangeVideo** - UdonSharp component for video player management
+  - Supports 6 video player systems: ProTV, iwaSync3, USharpVideo, VizVid, YamaPlayer, VideoTXL
+  - Unified inspector with inline settings for each player type
+  - Built-in sync for Unity video players (master-driven timestamp sync)
+  - AudioLink integration with automatic wiring
+  - Custom inspector with Dashboard quick-access button
+- **Video Workflow Section** (Visuals Tab)
+  - Video player dropdown with one-click prefab instantiation
+  - Smart status panel with progressive status rows and auto-wiring
+  - Per-player inline settings (autoplay, sync, security, media options, optional components, etc.)
+  - Debug overrides panel for testing without packages installed
+  - StrangeHub video timestamp sync (synced field for video state)
+
 ## [2.0.0] - 2026-01-31
 
 ### Added

@@ -6,7 +6,9 @@
         "UdonSharp.Runtime",
         "UdonSharp.Editor",
         "VRC.Udon",
-        "VRC.SDK3"
+        "VRC.SDK3",
+        "AVProVideo.Runtime",
+        "AVProVideo.Editor"
     ],
     "includePlatforms": [
         "Editor"
@@ -17,6 +19,12 @@
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [],
-    "versionDefines": [],
+    "versionDefines": [
+        {
+            "name": "com.vrchat.worlds",
+            "expression": "3.6.1-beta.2",
+            "define": "VRCSDK_3_6_1"
+        }
+    ],
     "noEngineReferences": false
 }

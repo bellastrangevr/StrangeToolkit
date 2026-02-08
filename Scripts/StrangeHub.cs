@@ -3,9 +3,12 @@ using UdonSharp;
 using VRC.SDKBase;
 using VRC.Udon;
 
-[UdonBehaviourSyncMode(BehaviourSyncMode.None)]
+[UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
 public class StrangeHub : UdonSharpBehaviour
 {
+    [UdonSynced]
+    public float videoTimestamp = 0f;
+
     // Atmosphere data (parallel arrays for Udon)
     public string[] atmoNames;
     public bool[] atmoIsDefault;

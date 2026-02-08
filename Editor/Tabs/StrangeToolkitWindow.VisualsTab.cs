@@ -17,6 +17,11 @@ namespace StrangeToolkit
 
             GUILayout.Space(8);
 
+            // Video Workflow Section
+            DrawVideoSection();
+
+            GUILayout.Space(8);
+
             // GPU Instancing Tools Section
             DrawGpuInstancingToolsSection();
 

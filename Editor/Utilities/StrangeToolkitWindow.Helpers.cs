@@ -19,6 +19,8 @@ namespace StrangeToolkit
         private void RefreshSystem()
         {
             SimpleScan();
+            StrangeProTV.ResetCache();
+            VideoPlayerUtil.ResetCache();
             _cachedHub = null;
             _realtimeLights.Clear();
             _nonStaticObjects.Clear();

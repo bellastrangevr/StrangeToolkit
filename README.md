@@ -14,7 +14,7 @@ A Unity editor toolkit for VRChat world creators. Provides atmosphere presets, s
 
 ### Strange Hub
 Central manager for your world that handles:
-- **Atmosphere Presets** - Define multiple skybox/fog/lighting configurations and switch between them at runtime
+- **Atmosphere Presets** - Create your own skybox/fog/lighting configurations and switch between them at runtime
 - **Toggle Persistence** - Save and restore toggle states across sessions
 
 ### Object Cleanup (StrangeCleanup)

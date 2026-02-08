@@ -62,6 +62,7 @@ namespace StrangeToolkit
         private bool _scanComplete = false;
         private Type _tRedSim_LPPV, _tBakery;
 
+        private bool _showDebugOverrides;
         private StrangeHub _cachedHub;
         private double _lastHubCheckTime;
         private const double HUB_CACHE_DURATION = 1.0;
@@ -244,6 +245,48 @@ namespace StrangeToolkit
             DrawTabButton("Expansions", ToolkitTab.Expansions);
 
             GUILayout.FlexibleSpace();
+
+            // Debug overrides
+            _showDebugOverrides = EditorGUILayout.Foldout(_showDebugOverrides, "Debug", true);
+            if (_showDebugOverrides)
+            {
+                bool newProTv = EditorGUILayout.ToggleLeft("Hide ProTV", StrangeProTV.DebugForceNotInstalled);
+                if (newProTv != StrangeProTV.DebugForceNotInstalled)
+                {
+                    StrangeProTV.DebugForceNotInstalled = newProTv;
+                    Repaint();
+                }
+
+                bool newIwaSync3 = EditorGUILayout.ToggleLeft("Hide iwaSync3", StrangeIwaSync3.DebugForceNotInstalled);
+                if (newIwaSync3 != StrangeIwaSync3.DebugForceNotInstalled)
+                {
+                    StrangeIwaSync3.DebugForceNotInstalled = newIwaSync3;
+                    Repaint();
+                }
+
+                bool newUSharpVideo = EditorGUILayout.ToggleLeft("Hide USharpVideo", StrangeUSharpVideo.DebugForceNotInstalled);
+                if (newUSharpVideo != StrangeUSharpVideo.DebugForceNotInstalled)
+                {
+                    StrangeUSharpVideo.DebugForceNotInstalled = newUSharpVideo;
+                    Repaint();
+                }
+
+                bool newVizVid = EditorGUILayout.ToggleLeft("Hide VizVid", StrangeVizVid.DebugForceNotInstalled);
+                if (newVizVid != StrangeVizVid.DebugForceNotInstalled)
+                {
+                    StrangeVizVid.DebugForceNotInstalled = newVizVid;
+                    Repaint();
+                }
+
+                bool newAudioLink = EditorGUILayout.ToggleLeft("Hide AudioLink", VideoPlayerUtil.DebugForceNotInstalled);
+                if (newAudioLink != VideoPlayerUtil.DebugForceNotInstalled)
+                {
+                    VideoPlayerUtil.DebugForceNotInstalled = newAudioLink;
+                    Repaint();
+                }
+            }
+
+            GUILayout.Space(5);
             if (GUILayout.Button("Refresh System")) RefreshSystem();
             GUILayout.Space(10);
 
