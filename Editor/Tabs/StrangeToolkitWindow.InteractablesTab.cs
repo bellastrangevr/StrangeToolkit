@@ -422,6 +422,24 @@ namespace StrangeToolkit
         private void RemoveUdonSharpBehaviour(StrangeToggle toggle)
         {
             GameObject go = toggle.gameObject;
+
+#if UNITY_EDITOR
+            var state = go.GetComponent<StrangeToggleOriginalState>();
+            if (state != null)
+            {
+                if (state.hasBeenSet)
+                {
+                    var mc = go.GetComponent<MeshCollider>();
+                    if (mc != null)
+                    {
+                        Undo.RecordObject(mc, "Restore Convexity");
+                        mc.convex = state.wasConvex;
+                    }
+                }
+                Undo.DestroyObjectImmediate(state);
+            }
+#endif
+
             _toggleExpanded.Remove(toggle);
 
             // Use UdonSharpEditorUtility to get the backing UdonBehaviour

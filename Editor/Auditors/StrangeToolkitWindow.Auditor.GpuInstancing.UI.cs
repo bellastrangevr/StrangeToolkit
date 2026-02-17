@@ -144,7 +144,7 @@ namespace StrangeToolkit
                 GUILayout.Space(3);
 
                 _instancingReadyScroll = EditorGUILayout.BeginScrollView(_instancingReadyScroll,
-                    GUILayout.Height(Mathf.Min(250, filteredGroups.Count * 28 + 10)));
+                    GUILayout.Height(Mathf.Min(800, filteredGroups.Count * 28 + 10)));
 
                 foreach (var group in filteredGroups)
                 {

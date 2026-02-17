@@ -29,6 +29,21 @@ public class StrangeToggleEditor : Editor
 
     private void OnEnable()
     {
+#if UNITY_EDITOR
+        StrangeToggle toggle = (StrangeToggle)target;
+        if (toggle != null && toggle.GetComponent<StrangeToggleOriginalState>() == null)
+        {
+            var mc = toggle.GetComponent<MeshCollider>();
+            if (mc != null)
+            {
+                var state = Undo.AddComponent<StrangeToggleOriginalState>(toggle.gameObject);
+                state.wasConvex = mc.convex;
+                state.hasBeenSet = true;
+                state.hideFlags = HideFlags.HideInInspector;
+            }
+        }
+#endif
+        
         hub = serializedObject.FindProperty("hub");
         persistenceID = serializedObject.FindProperty("persistenceID");
         defaultOn = serializedObject.FindProperty("defaultOn");

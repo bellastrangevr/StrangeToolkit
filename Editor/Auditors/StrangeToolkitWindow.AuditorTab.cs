@@ -410,7 +410,26 @@ namespace StrangeToolkit
             {
                 if (current.GetComponent("VRCPickup") != null || current.GetComponent("VRC.SDK3.Components.VRCPickup") != null)
                     return "Is Pickup (self or parent)";
+                
+                // NEW SCRIPT CHECKS ON PARENT/SELF
+                foreach (var component in current.GetComponents<Component>())
+                {
+                    if (component == null) continue;
+                    string typeName = component.GetType().Name;
+                    if (typeName.IndexOf("Thry", System.StringComparison.OrdinalIgnoreCase) >= 0) return "Has Thry Script";
+                    if (typeName.IndexOf("VRSL", System.StringComparison.OrdinalIgnoreCase) >= 0) return "Has VRSL Script";
+                }
+                
                 current = current.parent;
+            }
+
+            // NEW SCRIPT CHECKS ON CHILDREN
+            foreach (var component in go.GetComponentsInChildren<Component>(true))
+            {
+                if (component == null) continue;
+                string typeName = component.GetType().Name;
+                if (typeName.IndexOf("Thry", System.StringComparison.OrdinalIgnoreCase) >= 0) return "Has Thry Script";
+                if (typeName.IndexOf("VRSL", System.StringComparison.OrdinalIgnoreCase) >= 0) return "Has VRSL Script";
             }
 
             return null;
