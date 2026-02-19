@@ -64,6 +64,11 @@ namespace StrangeToolkit
         public List<InstanceGroup> readyGroups = new List<InstanceGroup>();
 
         /// <summary>
+        /// Groups that are marked as static but are not being batched.
+        /// </summary>
+        public List<InstanceGroup> staticGroups = new List<InstanceGroup>();
+
+        /// <summary>
         /// Meshes with multiple different materials - need consolidation first.
         /// </summary>
         public List<MaterialConsolidationGroup> consolidationGroups = new List<MaterialConsolidationGroup>();
@@ -80,6 +85,7 @@ namespace StrangeToolkit
         public void Clear()
         {
             readyGroups.Clear();
+            staticGroups.Clear();
             consolidationGroups.Clear();
             markedForInstancing.Clear();
         }

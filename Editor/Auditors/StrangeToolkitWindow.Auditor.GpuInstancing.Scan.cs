@@ -10,12 +10,17 @@ namespace StrangeToolkit
         // GPU Instancing data - using new data structures from InstancingDataStructures.cs
         private InstancingAnalysis _instancingAnalysis = new InstancingAnalysis();
         private Vector2 _instancingReadyScroll;
+        private Vector2 _instancingStaticScroll;
         private Vector2 _instancingCandidatesScroll;
         private bool _showGpuInstancing = true;
         private bool _showReadyGroups = true;
+        private bool _showStaticGroups = true;
         private bool _showConsolidationGroups = true;
         private int _minInstanceCount = 5;
         private string _instancingFilter = "";
+
+        // Cache for fast lookups in the UI
+        private HashSet<GameObject> _instancingCandidateCache = new HashSet<GameObject>();
 
         // Persistence for selections across rescans
         private HashSet<GameObject> _persistentSelectedObjects = new HashSet<GameObject>();
@@ -42,14 +47,16 @@ namespace StrangeToolkit
             // Step 1: Group all renderers by mesh
             foreach (var renderer in renderers)
             {
+                // Ignore objects that are dynamic
+                if (IsObjectDynamic(renderer.gameObject))
+                    continue;
+                
                 var filter = renderer.GetComponent<MeshFilter>();
                 if (filter == null || filter.sharedMesh == null || renderer.sharedMaterial == null)
                     continue;
 
                 var mesh = filter.sharedMesh;
-                var allStaticFlags = (StaticEditorFlags)(-1);
-                bool isStaticBatched = renderer.gameObject.isStatic &&
-                    GameObjectUtility.GetStaticEditorFlags(renderer.gameObject) == allStaticFlags;
+                bool isStaticBatched = (GameObjectUtility.GetStaticEditorFlags(renderer.gameObject) & StaticEditorFlags.BatchingStatic) != 0;
 
                 if (!meshGroups.ContainsKey(mesh))
                     meshGroups[mesh] = new List<(MeshRenderer, Material, bool)>();
@@ -87,6 +94,26 @@ namespace StrangeToolkit
                 .ToList();
 
             RestoreInstancingSelections();
+
+            // Step 3: Populate the cache for fast UI lookups
+            _instancingCandidateCache.Clear();
+            foreach (var group in _instancingAnalysis.readyGroups)
+            {
+                foreach (var candidate in group.candidates)
+                {
+                    _instancingCandidateCache.Add(candidate.gameObject);
+                }
+            }
+            foreach (var consGroup in _instancingAnalysis.consolidationGroups)
+            {
+                foreach (var group in consGroup.instanceGroups)
+                {
+                    foreach (var candidate in group.candidates)
+                    {
+                        _instancingCandidateCache.Add(candidate.gameObject);
+                    }
+                }
+            }
         }
 
         private void ProcessSingleMaterialGroup(Mesh mesh, Dictionary<Material, List<(MeshRenderer renderer, Material material, bool isStaticBatched)>> materialGroups)
@@ -108,7 +135,16 @@ namespace StrangeToolkit
                         isSelected = true
                     }).ToList()
                 };
-                _instancingAnalysis.readyGroups.Add(group);
+
+                // If any candidate in the group is marked for static batching, move the whole group to the static list.
+                if (group.candidates.Any(c => c.isStaticBatched))
+                {
+                    _instancingAnalysis.staticGroups.Add(group);
+                }
+                else
+                {
+                    _instancingAnalysis.readyGroups.Add(group);
+                }
             }
         }
 
@@ -202,27 +238,6 @@ namespace StrangeToolkit
                     candidate.isMarkedForInstancing = _instancingAnalysis.markedForInstancing.Contains(candidate.gameObject);
                 }
             }
-        }
-
-        /// <summary>
-        /// Check if a GameObject is an instancing candidate.
-        /// </summary>
-        public bool IsInstancingCandidate(GameObject obj)
-        {
-            foreach (var group in _instancingAnalysis.readyGroups)
-            {
-                if (group.candidates.Any(c => c.gameObject == obj))
-                    return true;
-            }
-            foreach (var consGroup in _instancingAnalysis.consolidationGroups)
-            {
-                foreach (var group in consGroup.instanceGroups)
-                {
-                    if (group.candidates.Any(c => c.gameObject == obj))
-                        return true;
-                }
-            }
-            return false;
         }
     }
 }

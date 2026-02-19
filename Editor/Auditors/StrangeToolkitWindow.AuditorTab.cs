@@ -67,7 +67,9 @@ namespace StrangeToolkit
                     GUILayout.Space(10);
 
                     DrawRealtimeLightsSection();
+                    GUILayout.Space(10);
                     DrawNonStaticObjectsSection();
+                    GUILayout.Space(10);
                     DrawBrokenStaticObjectsSection();
 
                     if (_auditorClean && _occlusionSize > 0 && _nonStaticObjects.Count == 0 && _brokenStaticObjects.Count == 0)
@@ -126,111 +128,110 @@ namespace StrangeToolkit
 
         private void DrawNonStaticObjectsSection()
         {
-            if (_nonStaticObjects.Count == 0) return;
+            if (!_auditorHasRun) return;
 
             // Count objects, excluding those marked for instancing
-            int safeToStaticCount = _nonStaticObjects.Count(x => x.IsSafeToStatic && !_instancingAnalysis.markedForInstancing.Contains(x.obj));
+            int safeToStaticCount = _nonStaticObjects.Count(x => x.IsSafeToStatic && !GameObjectUtility.GetStaticEditorFlags(x.obj).HasFlag(StaticEditorFlags.BatchingStatic));
             int markedForInstancingCount = _nonStaticObjects.Count(x => x.IsSafeToStatic && _instancingAnalysis.markedForInstancing.Contains(x.obj));
-            int ignoredCount = _nonStaticObjects.Count - safeToStaticCount - markedForInstancingCount;
+            int ignoredCount = _nonStaticObjects.Count(x => !x.IsSafeToStatic);
 
             string staticTooltip = "Objects that never move should be Static.\n\nMoving Objects (Pickups/Animators) are flagged below.\nObjects marked for instancing are also excluded.";
-            DrawTooltipHelpBox($"{safeToStaticCount} Static Candidates found.", staticTooltip, MessageType.Warning);
+            
+            if (safeToStaticCount > 0)
+            {
+                DrawTooltipHelpBox($"{safeToStaticCount} Static Candidates found.", staticTooltip, MessageType.Warning);
+            }
+            else
+            {
+                DrawTooltipHelpBox("No further static candidates found.", "All non-static objects either have logic attached or have been marked for instancing.", MessageType.Info);
+            }
+
             if (ignoredCount > 0)
                 GUILayout.Label($"({ignoredCount} objects excluded due to logic/animation)", EditorStyles.miniLabel);
             if (markedForInstancingCount > 0)
                 GUILayout.Label($"({markedForInstancingCount} objects marked for instancing)", EditorStyles.miniLabel);
 
-            _nonStaticObjectsScrollPos = EditorGUILayout.BeginScrollView(_nonStaticObjectsScrollPos, GUILayout.Height(250));
-
-            foreach (var entry in _nonStaticObjects)
+            if (_nonStaticObjects.Count > 0)
             {
-                if (entry.obj == null) continue;
+                _nonStaticObjectsScrollPos = EditorGUILayout.BeginScrollView(_nonStaticObjectsScrollPos, GUILayout.Height(250));
 
-                // Check if this object is marked for instancing (only for candidates)
-                bool isMarkedForInstancing = _instancingAnalysis.markedForInstancing.Contains(entry.obj);
-                bool isInstancingCandidate = IsInstancingCandidate(entry.obj);
-
-                EditorGUILayout.BeginHorizontal(_listItemStyle);
-
-                if (isMarkedForInstancing && isInstancingCandidate)
+                foreach (var entry in _nonStaticObjects)
                 {
-                    // Object is marked for instancing - show special UI
-                    GUI.enabled = false;
-                    GUI.color = Color.cyan;
-                    GUILayout.Label($"{entry.obj.name}", _ignoredStyle, GUILayout.Width(180));
-                    GUILayout.Label("[Instanced]", EditorStyles.miniLabel, GUILayout.Width(70));
-                    GUI.color = Color.white;
-                    GUI.enabled = true;
+                    if (entry.obj == null) continue;
 
-                    GUILayout.FlexibleSpace();
+                    bool isMarkedForInstancing = _instancingAnalysis.markedForInstancing.Contains(entry.obj);
 
-                    // Allow switching back to static
-                    if (GUILayout.Button(new GUIContent("Switch to Static", "Remove from instancing and enable static batching instead."), GUILayout.Width(100)))
+                    EditorGUILayout.BeginHorizontal(_listItemStyle);
+
+                    if (isMarkedForInstancing)
                     {
-                        _instancingAnalysis.markedForInstancing.Remove(entry.obj);
-                        Undo.RecordObject(entry.obj, "Switch to Static Batching");
-                        entry.obj.isStatic = true;
+                        // Object is marked for instancing - show special UI
+                        GUI.enabled = false;
+                        GUI.color = Color.cyan;
+                        GUILayout.Label($"{entry.obj.name}", _ignoredStyle, GUILayout.Width(180));
+                        GUILayout.Label("[Instanced]", EditorStyles.miniLabel, GUILayout.Width(70));
+                        GUI.color = Color.white;
+                        GUI.enabled = true;
+
+                        GUILayout.FlexibleSpace();
+                    }
+                    else if (entry.IsSafeToStatic)
+                    {
+                        GUILayout.Label(entry.obj.name, GUILayout.Width(180));
+                        GUILayout.FlexibleSpace();
+
                         var flags = GameObjectUtility.GetStaticEditorFlags(entry.obj);
-                        flags |= StaticEditorFlags.BatchingStatic;
-                        GameObjectUtility.SetStaticEditorFlags(entry.obj, flags);
-                        EditorUtility.SetDirty(entry.obj);
+                        var allStaticFlags = (StaticEditorFlags)(-1);
+                        bool isFullyStatic = entry.obj.isStatic && flags == allStaticFlags;
+                        
+                        string btnText = isFullyStatic ? "STATIC: NON-MOVING" : "NOT STATIC";
+                        Color btnColor = isFullyStatic ? Color.green : new Color(1f, 0.4f, 0.4f);
+
+                        GUI.backgroundColor = btnColor;
+                        string tooltip = isFullyStatic
+                            ? "Switch to Dynamic. Warning: If you have baked lighting, this object may appear differently."
+                            : "Switch to Static (enables static batching and baked lighting)";
+                        
+                        if (GUILayout.Button(new GUIContent(btnText, tooltip), GUILayout.Width(130)))
+                        {
+                            Undo.RecordObject(entry.obj, "Toggle Static");
+                            if (isFullyStatic)
+                            {
+                                GameObjectUtility.SetStaticEditorFlags(entry.obj, 0);
+                                entry.obj.isStatic = false;
+                            }
+                            else
+                            {
+                                entry.obj.isStatic = true;
+                                GameObjectUtility.SetStaticEditorFlags(entry.obj, allStaticFlags);
+                            }
+                            EditorUtility.SetDirty(entry.obj);
+                            RunExtendedScan(); // Rescan GPU instancing and other inter-dependent auditors
+                        }
+                        GUI.backgroundColor = Color.white;
                     }
-                }
-                else if (entry.IsSafeToStatic)
-                {
-                    GUILayout.Label(entry.obj.name, GUILayout.Width(180));
-                    GUILayout.FlexibleSpace();
-
-                    // Check if fully static (ALL flags enabled = "Everything")
-                    var flags = GameObjectUtility.GetStaticEditorFlags(entry.obj);
-                    var allStaticFlags = (StaticEditorFlags)(-1); // All flags
-                    bool isFullyStatic = entry.obj.isStatic && flags == allStaticFlags;
-                    string btnText = isFullyStatic ? "STATIC" : "DYNAMIC";
-                    Color btnColor = isFullyStatic ? Color.green : new Color(1f, 0.4f, 0.4f);
-
-                    GUI.backgroundColor = btnColor;
-                    string tooltip = isFullyStatic
-                        ? "Switch to Dynamic. Warning: If you have baked lighting, this object may appear differently as it will no longer receive baked lightmaps."
-                        : "Switch to Static (enables static batching and baked lighting)";
-                    if (GUILayout.Button(new GUIContent(btnText, tooltip), GUILayout.Width(80)))
+                    else
                     {
-                        Undo.RecordObject(entry.obj, "Toggle Static");
-                        if (isFullyStatic)
-                        {
-                            // Remove all static flags
-                            GameObjectUtility.SetStaticEditorFlags(entry.obj, 0);
-                            entry.obj.isStatic = false;
-                        }
-                        else
-                        {
-                            // Set to fully static (Everything)
-                            entry.obj.isStatic = true;
-                            GameObjectUtility.SetStaticEditorFlags(entry.obj, allStaticFlags);
-                        }
-                        EditorUtility.SetDirty(entry.obj);
+                        GUI.enabled = false;
+                        GUILayout.Label($"{entry.obj.name}", _ignoredStyle, GUILayout.Width(180));
+                        GUILayout.Label($"[Logic: {entry.reason}]", EditorStyles.miniLabel, GUILayout.Width(100));
+                        GUI.enabled = true;
+
+                        GUILayout.FlexibleSpace();
+
+                        GUI.enabled = false;
+                        GUILayout.Button("LOCKED", GUILayout.Width(80));
+                        GUI.enabled = true;
                     }
-                    GUI.backgroundColor = Color.white;
+
+                    if (GUILayout.Button("Sel", GUILayout.Width(40))) Selection.activeGameObject = entry.obj;
+                    EditorGUILayout.EndHorizontal();
                 }
-                else
-                {
-                    GUI.enabled = false;
-                    GUILayout.Label($"{entry.obj.name}", _ignoredStyle, GUILayout.Width(180));
-                    GUILayout.Label($"[Logic: {entry.reason}]", EditorStyles.miniLabel, GUILayout.Width(100));
-                    GUI.enabled = true;
-
-                    GUILayout.FlexibleSpace();
-
-                    GUI.enabled = false;
-                    GUILayout.Button("LOCKED", GUILayout.Width(80));
-                    GUI.enabled = true;
-                }
-
-                if (GUILayout.Button("Sel", GUILayout.Width(40))) Selection.activeGameObject = entry.obj;
-                EditorGUILayout.EndHorizontal();
+                EditorGUILayout.EndScrollView();
             }
-            EditorGUILayout.EndScrollView();
 
             GUILayout.Space(5);
+            EditorGUILayout.HelpBox("All actions are Undo-able with Ctrl+Z (or Cmd+Z on Mac).", MessageType.None);
             GUILayout.BeginHorizontal();
 
             if (GUILayout.Button("Select Safe Candidates"))
@@ -240,8 +241,9 @@ namespace StrangeToolkit
                     .Select(x => x.obj).ToArray();
             }
 
-            GUI.enabled = safeToStaticCount > 0;
-            if (GUILayout.Button($"Set All Safe to Static")) FixStatic();
+            GUI.enabled = _nonStaticObjects.Any(x => x.IsSafeToStatic);
+            if (GUILayout.Button($"Set All to Static")) FixStatic();
+            if (GUILayout.Button($"Set All to Not Static")) FixNotStatic();
             GUI.enabled = true;
 
             GUILayout.EndHorizontal();
@@ -249,7 +251,7 @@ namespace StrangeToolkit
 
         private void DrawBrokenStaticObjectsSection()
         {
-            if (_brokenStaticObjects.Count == 0) return;
+            if (!_auditorHasRun || _brokenStaticObjects.Count == 0) return;
 
             GUILayout.Space(10);
             string brokenTooltip = "These objects are set to Static but have components that require movement (Rigidbody, Pickup, etc.).\n\nThis will cause broken behavior in-game!";
@@ -257,8 +259,9 @@ namespace StrangeToolkit
 
             _brokenStaticScrollPos = EditorGUILayout.BeginScrollView(_brokenStaticScrollPos, GUILayout.Height(150));
 
-            foreach (var entry in _brokenStaticObjects)
+            for (int i = _brokenStaticObjects.Count - 1; i >= 0; i--)
             {
+                var entry = _brokenStaticObjects[i];
                 if (entry.obj == null) continue;
 
                 EditorGUILayout.BeginHorizontal(_listItemStyle);
@@ -274,8 +277,7 @@ namespace StrangeToolkit
                     Undo.RecordObject(entry.obj, "Fix Broken Static");
                     entry.obj.isStatic = false;
                     EditorUtility.SetDirty(entry.obj);
-                    RunAuditorScan();
-                    GUIUtility.ExitGUI();
+                    _brokenStaticObjects.RemoveAt(i); // Remove from list immediately
                 }
                 GUI.backgroundColor = Color.white;
 
@@ -434,7 +436,7 @@ namespace StrangeToolkit
 
             return null;
         }
-
+        
         private void FixLights()
         {
             Light[] lightsArray = _realtimeLights.ToArray();
@@ -451,25 +453,45 @@ namespace StrangeToolkit
 
         private void FixStatic()
         {
-            // Exclude objects marked for instancing
             var safeObjects = _nonStaticObjects
-                .Where(x => x.IsSafeToStatic && !_instancingAnalysis.markedForInstancing.Contains(x.obj))
+                .Where(x => x.IsSafeToStatic)
                 .Select(x => x.obj)
                 .ToArray();
 
-            if (safeObjects.Length == 0)
-            {
-                StrangeToolkitLogger.Log("No objects to set as static (some may be marked for instancing).");
-                return;
-            }
+            if (safeObjects.Length == 0) return;
 
-            Undo.RecordObjects(safeObjects, "Fix Static");
+            Undo.RecordObjects(safeObjects, "Set All to Static");
+            var allStaticFlags = (StaticEditorFlags)(-1);
             foreach (var go in safeObjects)
             {
+                if (go == null) continue;
                 go.isStatic = true;
+                GameObjectUtility.SetStaticEditorFlags(go, allStaticFlags);
                 EditorUtility.SetDirty(go);
             }
+
             StrangeToolkitLogger.LogSuccess($"Set {safeObjects.Length} object(s) to Static");
+            RunAuditorScan();
+        }
+
+        private void FixNotStatic()
+        {
+            var safeObjects = _nonStaticObjects
+                .Where(x => x.IsSafeToStatic)
+                .Select(x => x.obj)
+                .ToArray();
+
+            if (safeObjects.Length == 0) return;
+
+            Undo.RecordObjects(safeObjects, "Set All to Not Static");
+            foreach (var go in safeObjects)
+            {
+                if (go == null) continue;
+                go.isStatic = false;
+                GameObjectUtility.SetStaticEditorFlags(go, 0);
+                EditorUtility.SetDirty(go);
+            }
+            StrangeToolkitLogger.LogSuccess($"Set {safeObjects.Length} object(s) to Not Static");
             RunAuditorScan();
         }
 
@@ -480,14 +502,16 @@ namespace StrangeToolkit
                 .ToArray();
 
             int count = brokenObjects.Length;
-            Undo.RecordObjects(brokenObjects, "Fix Broken Static");
-            foreach (var go in brokenObjects)
+            Undo.RecordObjects(brokenObjects, "Fix All Broken Static");
+            for (int i = brokenObjects.Length - 1; i >= 0; i--)
             {
+                var go = brokenObjects[i];
+                if (go == null) continue;
                 go.isStatic = false;
                 EditorUtility.SetDirty(go);
+                _brokenStaticObjects.RemoveAt(i);
             }
             StrangeToolkitLogger.LogSuccess($"Set {count} object(s) to Dynamic (removed Static flag)");
-            RunAuditorScan();
         }
 
         private void DrawTooltipHelpBox(string message, string tooltip, MessageType type)
@@ -503,7 +527,6 @@ namespace StrangeToolkit
             GUILayout.Space(5);
             GUILayout.Label("Quest Optimization Helper", _subHeaderStyle);
             GUILayout.Space(5);
-            // Use compressed build size for download estimate, fall back to estimated compression ratio
             DrawMetricBar("Estimated Download Size (Limit 100MB)", _estimatedDownloadBytes, 85.0f, 50.0f, true);
             GUILayout.Space(10);
             DrawMetricBar("Estimated Texture Memory (VRAM)", _totalVRAMBytes, 99999.0f, 99999.0f, false);
@@ -759,9 +782,6 @@ namespace StrangeToolkit
                 AnalyzeFromScene();
             }
 
-            // Calculate Quest download estimate from VRAM with typical compression ratios
-            // Quest uses ASTC textures which compress ~4-6x for download, meshes ~2-3x, audio ~4x
-            // Using conservative estimates: textures 4x, meshes 2x, audio 3x overall
             CalculateQuestDownloadEstimate();
 
             _weightScanRun = true;
@@ -769,13 +789,8 @@ namespace StrangeToolkit
 
         private void CalculateQuestDownloadEstimate()
         {
-            // Textures: ASTC in VRAM compresses well for download (~4x)
             long textureDownload = _heaviestTextures.Sum(t => t.vramSize) / 4;
-
-            // Meshes: Compressed ~2x for download
             long meshDownload = _heaviestMeshes.Sum(m => m.memSize) / 2;
-
-            // Audio: Vorbis/ADPCM compresses ~3x for download
             long audioDownload = _registry.audio.Sum(a => a.memSize) / 3;
 
             _estimatedDownloadBytes = textureDownload + meshDownload + audioDownload;
@@ -942,7 +957,6 @@ namespace StrangeToolkit
                 if (!uniqueMeshes.ContainsKey(mesh))
                 {
                     long vram = Profiler.GetRuntimeMemorySizeLong(mesh);
-                    // Use GetIndexCount instead of triangles.Length to avoid array allocation
                     int triCount = 0;
                     for (int i = 0; i < mesh.subMeshCount; i++)
                         triCount += (int)mesh.GetIndexCount(i);

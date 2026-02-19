@@ -175,6 +175,30 @@ namespace StrangeToolkit
             RunExtendedScan();
         }
 
+        private void EnableInstancingOnSelectedStaticGroups()
+        {
+            var materials = _instancingAnalysis.staticGroups
+                .Where(g => g.isSelected && !g.HasInstancingEnabled)
+                .Select(g => g.material)
+                .Distinct()
+                .ToArray();
+
+            if (materials.Length == 0)
+            {
+                StrangeToolkitLogger.Log("All selected materials already have instancing enabled.");
+                return;
+            }
+
+            Undo.RecordObjects(materials, "Enable GPU Instancing");
+            foreach (var mat in materials)
+            {
+                mat.enableInstancing = true;
+                EditorUtility.SetDirty(mat);
+            }
+            StrangeToolkitLogger.LogSuccess($"Enabled GPU instancing on {materials.Length} materials.");
+            RunExtendedScan();
+        }
+
         // === STATIC BATCHING SWITCH METHODS ===
 
         private void SwitchToInstancing(InstancingCandidate candidate)

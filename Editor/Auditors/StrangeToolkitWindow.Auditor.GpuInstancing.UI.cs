@@ -91,8 +91,18 @@ namespace StrangeToolkit
 
                 GUILayout.Space(8);
 
+                // Static Groups Section
+                DrawStaticGroupsSection();
+
+                GUILayout.Space(8);
+
                 // Consolidation Section
                 DrawConsolidationSection();
+
+                GUILayout.Space(8);
+
+                // Advanced Instancing Section
+                DrawInstancedConverterSection();
             }
 
             EditorGUILayout.EndVertical();
@@ -159,6 +169,70 @@ namespace StrangeToolkit
                 GUILayout.Label(string.IsNullOrEmpty(_instancingFilter)
                     ? "No instance groups found with current threshold."
                     : "No matches.", EditorStyles.miniLabel);
+                GUI.color = Color.white;
+            }
+        }
+
+        private void DrawStaticGroupsSection()
+        {
+            var staticGroups = _instancingAnalysis.staticGroups;
+
+            // Filter groups by min count and text filter
+            var filteredGroups = staticGroups
+                .Where(g => g.candidates.Count >= _minInstanceCount)
+                .Where(g => string.IsNullOrEmpty(_instancingFilter) ||
+                    g.mesh.name.IndexOf(_instancingFilter, System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    g.material.name.IndexOf(_instancingFilter, System.StringComparison.OrdinalIgnoreCase) >= 0)
+                .ToList();
+
+            // Section header
+            EditorGUILayout.BeginHorizontal();
+            _showStaticGroups = EditorGUILayout.Foldout(_showStaticGroups, $"Static Instancing Candidates ({filteredGroups.Count})", true);
+            GUILayout.FlexibleSpace();
+
+            if (staticGroups.Count > 0 && _showStaticGroups)
+            {
+                // Select All / Deselect All toggle
+                bool allGroupsSelected = filteredGroups.All(g => g.isSelected);
+                bool anySelected = filteredGroups.Any(g => g.isSelected);
+                bool newAllSelected = EditorGUILayout.Toggle(allGroupsSelected, GUILayout.Width(18));
+                if (newAllSelected != allGroupsSelected)
+                {
+                    foreach (var g in filteredGroups)
+                        g.isSelected = newAllSelected;
+                }
+
+                // Dynamic button text based on selection
+                string buttonText = allGroupsSelected ? "Enable All" : "Enable Selected";
+                bool wasEnabled = GUI.enabled;
+                GUI.enabled = anySelected;
+                if (GUILayout.Button(buttonText, EditorStyles.miniButton, GUILayout.Width(105)))
+                {
+                    EnableInstancingOnSelectedStaticGroups();
+                }
+                GUI.enabled = wasEnabled;
+            }
+            EditorGUILayout.EndHorizontal();
+
+            if (_showStaticGroups && filteredGroups.Count > 0)
+            {
+                EditorGUILayout.HelpBox("These objects are marked for Static Batching, but are still candidates for GPU Instancing if they are not being batched effectively. Enabling instancing on their materials can be a good performance boost.", MessageType.Info);
+                GUILayout.Space(3);
+
+                _instancingStaticScroll = EditorGUILayout.BeginScrollView(_instancingStaticScroll,
+                    GUILayout.Height(Mathf.Min(800, filteredGroups.Count * 28 + 10)));
+
+                foreach (var group in filteredGroups)
+                {
+                    DrawInstanceGroupRow(group);
+                }
+
+                EditorGUILayout.EndScrollView();
+            }
+            else if (_showStaticGroups && filteredGroups.Count == 0)
+            {
+                GUI.color = new Color(0.6f, 0.6f, 0.6f);
+                GUILayout.Label("No static instance groups found.", EditorStyles.miniLabel);
                 GUI.color = Color.white;
             }
         }
@@ -244,30 +318,15 @@ namespace StrangeToolkit
 
             if (candidate.isStaticBatched)
             {
-                GUI.color = new Color(0.6f, 0.6f, 0.6f);
+                // Is static, which is why it's in this list.
+                GUI.color = new Color(0.9f, 0.7f, 0.3f);
                 GUILayout.Label(displayName, EditorStyles.miniLabel, GUILayout.Width(160));
-                GUILayout.Label("[Static]", EditorStyles.miniLabel, GUILayout.Width(45));
+                GUILayout.Label("[Static Batching]", EditorStyles.miniLabel, GUILayout.Width(100));
                 GUI.color = Color.white;
-
-                if (GUILayout.Button("Switch", EditorStyles.miniButton, GUILayout.Width(45)))
-                {
-                    SwitchToInstancing(candidate);
-                }
-            }
-            else if (candidate.hadStaticFlags)
-            {
-                GUI.color = new Color(0.4f, 0.8f, 0.8f);
-                GUILayout.Label(displayName, EditorStyles.miniLabel, GUILayout.Width(160));
-                GUILayout.Label("[Switched]", EditorStyles.miniLabel, GUILayout.Width(55));
-                GUI.color = Color.white;
-
-                if (GUILayout.Button("Revert", EditorStyles.miniButton, GUILayout.Width(45)))
-                {
-                    RevertToStatic(candidate);
-                }
             }
             else
             {
+                // Not static, so it's a valid candidate for instancing.
                 GUILayout.Label(displayName, EditorStyles.miniLabel, GUILayout.Width(220));
             }
 

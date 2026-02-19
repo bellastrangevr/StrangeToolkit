@@ -22,11 +22,6 @@ namespace StrangeToolkit
 
             GUILayout.Space(8);
 
-            // GPU Instancing Tools Section
-            DrawGpuInstancingToolsSection();
-
-            GUILayout.Space(8);
-
             // Material Manager Section
             DrawMaterialManagerSection();
 

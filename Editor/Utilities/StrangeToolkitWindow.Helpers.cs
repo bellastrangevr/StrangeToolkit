@@ -5,10 +5,41 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 
+using VRC.SDKBase;
+using UdonSharp;
+
 namespace StrangeToolkit
 {
     public partial class StrangeToolkitWindow
     {
+        private bool IsObjectDynamic(GameObject obj)
+        {
+            if (obj == null) return false;
+
+            // Instantly return true if the object is not static
+            if (!obj.isStatic) return true;
+
+            var dynamicComponentTypes = new System.Type[]
+            {
+                typeof(Animator),
+                typeof(Animation),
+                typeof(Rigidbody),
+                typeof(VRC_Pickup),
+                typeof(VRC_AvatarDescriptor),
+                typeof(UdonSharpBehaviour)
+            };
+
+            foreach (var type in dynamicComponentTypes)
+            {
+                if (obj.GetComponent(type) != null)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+        
         private void SimpleScan()
         {
             _tRedSim_LPPV = FindScriptType("LightVolume");
