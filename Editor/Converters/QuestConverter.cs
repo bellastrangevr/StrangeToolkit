@@ -29,7 +29,7 @@ namespace StrangeToolkit
             }
 
             // 2. Pre-Flight Calculation
-            Renderer[] renderers = Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None);
+            Renderer[] renderers = Object.FindObjectsOfType<Renderer>(true);
             HashSet<Material> uniqueMaterials = new HashSet<Material>();
             foreach (var r in renderers)
             {
@@ -146,7 +146,7 @@ namespace StrangeToolkit
                 }
 
                 // Remap Renderers
-                Renderer[] newRenderers = Object.FindObjectsByType<Renderer>(FindObjectsSortMode.None);
+                Renderer[] newRenderers = Object.FindObjectsOfType<Renderer>(true);
                 foreach (var r in newRenderers)
                 {
                     Material[] sharedMats = r.sharedMaterials;
@@ -186,15 +186,38 @@ namespace StrangeToolkit
         public static void SyncTransformsFromPC()
         {
             var questScene = SceneManager.GetActiveScene();
-            if (!questScene.name.EndsWith("_Quest")) { EditorUtility.DisplayDialog("Error", "Not in a Quest scene.", "OK"); return; }
-
-            string pcPath = questScene.path.Replace("_Quest.unity", ".unity");
-            if (AssetDatabase.LoadAssetAtPath<SceneAsset>(pcPath) == null) { EditorUtility.DisplayDialog("Error", "Could not find matching PC scene.", "OK"); return; }
+            if (!questScene.name.EndsWith("_Quest")) { EditorUtility.DisplayDialog("Error", "This tool should be run from the _Quest scene.", "OK"); return; }
 
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+            
+            string pcPath = questScene.path.Replace("_Quest.unity", ".unity");
+            if (AssetDatabase.LoadAssetAtPath<SceneAsset>(pcPath) == null)
+            {
+                StrangeToolkitLogger.LogWarning("Could not find matching PC scene automatically.");
+                pcPath = EditorUtility.OpenFilePanel("Select PC Source Scene", Path.GetDirectoryName(questScene.path), "unity");
+
+                if (string.IsNullOrEmpty(pcPath))
+                {
+                    StrangeToolkitLogger.Log("Sync cancelled.");
+                    return;
+                }
+
+                // Convert absolute path to a project-relative path if needed
+                if (pcPath.StartsWith(Application.dataPath))
+                {
+                    pcPath = "Assets" + pcPath.Substring(Application.dataPath.Length);
+                }
+            }
 
             // 1. Open PC Scene
             var pcScene = EditorSceneManager.OpenScene(pcPath, OpenSceneMode.Single);
+            if (!pcScene.IsValid())
+            {
+                StrangeToolkitLogger.LogError($"Failed to open PC scene at: {pcPath}");
+                EditorSceneManager.OpenScene(questScene.path); // Reopen original scene
+                return;
+            }
+
             Dictionary<string, Queue<TransformData>> cache = new Dictionary<string, Queue<TransformData>>();
             foreach (GameObject root in pcScene.GetRootGameObjects())
                 TraverseAndCache(root.transform, "", cache);
@@ -205,9 +228,13 @@ namespace StrangeToolkit
             foreach (GameObject root in reopenedQuest.GetRootGameObjects())
                 ApplyCache(root.transform, "", cache, ref updatedCount);
 
-            EditorSceneManager.MarkSceneDirty(reopenedQuest);
-            StrangeToolkitLogger.LogSuccess($"Synced transforms for {updatedCount} objects from PC scene");
-            EditorUtility.DisplayDialog("Sync Complete", $"Transforms synced for {updatedCount} objects from PC scene.", "OK");
+            if (updatedCount > 0)
+            {
+                EditorSceneManager.MarkSceneDirty(reopenedQuest);
+            }
+            
+            StrangeToolkitLogger.LogSuccess($"Synced transforms for {updatedCount} objects from PC scene '{Path.GetFileNameWithoutExtension(pcPath)}'");
+            EditorUtility.DisplayDialog("Sync Complete", $"Transforms synced for {updatedCount} objects from '{Path.GetFileNameWithoutExtension(pcPath)}'.", "OK");
         }
 
         private static void TraverseAndCache(Transform t, string path, Dictionary<string, Queue<TransformData>> cache)

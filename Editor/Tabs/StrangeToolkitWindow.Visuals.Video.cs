@@ -20,6 +20,33 @@ namespace StrangeToolkit
         private Component _cachedAudioLink;
         private GameObject _mainScreen;
         private int _selectedPlayerType;
+        
+        private double _lastStatusUpdateTime;
+        private bool _statusCacheDirty = true;
+        
+        private string[] _cachedPlayerNames;
+        private string[] _cachedPlayerIds;
+        private string[] _cachedPlayerDescriptions;
+
+        // Cached status values
+        private bool _s_proTvInScene;
+        private bool _s_iwaSync3InScene;
+        private bool _s_uSharpVideoInScene;
+        private bool _s_vizVidInScene;
+        private bool _s_yamaPlayerInScene;
+        private bool _s_videoTXLInScene;
+        private Component _s_videoPlayer;
+        private Component _s_mediaControls;
+        private Component _s_audioLink;
+        private Component _s_audioAdapter;
+        private StrangeHub _s_hub;
+        private StrangeVideo _s_strangeVideo;
+        private Component _s_tvManager;
+        private Component _s_iwaSync3;
+        private Component _s_uSharpVideo;
+        private Component _s_vizVid;
+        private Component _s_yamaPlayer;
+        private Component _s_videoTXL;
 
         private const string UnityBuiltInPrefabPath = "Packages/com.vrchat.worlds/Samples/UdonExampleScene/Prefabs/VideoPlayers/UdonSyncPlayer (Unity).prefab";
 
@@ -76,13 +103,9 @@ namespace StrangeToolkit
 
             EditorGUILayout.EndVertical();
         }
-
-        private void DrawVideoPlayerSetupCard()
+        
+        private void RebuildPlayerLists()
         {
-            EditorGUILayout.BeginVertical(_listItemStyle);
-            GUILayout.Label("Video Player Setup", EditorStyles.boldLabel);
-
-            // Build list of available player types
             var playerNames = new List<string>();
             var playerIds = new List<string>();
             var playerDescriptions = new List<string>();
@@ -133,6 +156,22 @@ namespace StrangeToolkit
             playerIds.Add("unity");
             playerDescriptions.Add("Basic Unity video player. A third-party player is recommended for better format support and sync.");
 
+            _cachedPlayerNames = playerNames.ToArray();
+            _cachedPlayerIds = playerIds.ToArray();
+            _cachedPlayerDescriptions = playerDescriptions.ToArray();
+        }
+
+
+        private void DrawVideoPlayerSetupCard()
+        {
+            EditorGUILayout.BeginVertical(_listItemStyle);
+            GUILayout.Label("Video Player Setup", EditorStyles.boldLabel);
+            
+            if (_cachedPlayerNames == null)
+            {
+                RebuildPlayerLists();
+            }
+
             // Show install hints for missing players
             if (!StrangeProTV.IsInstalled && !StrangeIwaSync3.IsInstalled && !StrangeUSharpVideo.IsInstalled && !StrangeVizVid.IsInstalled && !StrangeYamaPlayer.IsInstalled && !StrangeVideoTXL.IsInstalled)
             {
@@ -154,20 +193,20 @@ namespace StrangeToolkit
 
             // Player selection + Add TV
             EditorGUILayout.BeginHorizontal();
-            _selectedPlayerType = Mathf.Clamp(_selectedPlayerType, 0, playerNames.Count - 1);
-            _selectedPlayerType = EditorGUILayout.Popup(_selectedPlayerType, playerNames.ToArray());
+            _selectedPlayerType = Mathf.Clamp(_selectedPlayerType, 0, _cachedPlayerNames.Length - 1);
+            _selectedPlayerType = EditorGUILayout.Popup(_selectedPlayerType, _cachedPlayerNames);
             GUI.backgroundColor = new Color(0.4f, 0.8f, 0.4f);
             if (GUILayout.Button("Add TV", GUILayout.Height(22), GUILayout.Width(80)))
             {
-                AddVideoPlayer(playerIds[_selectedPlayerType]);
+                AddVideoPlayer(_cachedPlayerIds[_selectedPlayerType]);
             }
             GUI.backgroundColor = Color.white;
             EditorGUILayout.EndHorizontal();
 
             // Show description for selected player
-            if (_selectedPlayerType >= 0 && _selectedPlayerType < playerDescriptions.Count)
+            if (_selectedPlayerType >= 0 && _selectedPlayerType < _cachedPlayerDescriptions.Length)
             {
-                EditorGUILayout.HelpBox(playerDescriptions[_selectedPlayerType], MessageType.Info);
+                EditorGUILayout.HelpBox(_cachedPlayerDescriptions[_selectedPlayerType], MessageType.Info);
             }
 
             GUILayout.Space(5);
@@ -177,41 +216,50 @@ namespace StrangeToolkit
 
             EditorGUILayout.EndVertical();
         }
+        
+        private void UpdateStatusCache()
+        {
+            _s_tvManager = StrangeProTV.IsInstalled ? StrangeProTV.FindInScene() : null;
+            _s_proTvInScene = _s_tvManager != null;
+            _s_iwaSync3 = StrangeIwaSync3.IsInstalled ? StrangeIwaSync3.FindInScene() : null;
+            _s_iwaSync3InScene = _s_iwaSync3 != null;
+            _s_uSharpVideo = StrangeUSharpVideo.IsInstalled ? StrangeUSharpVideo.FindInScene() : null;
+            _s_uSharpVideoInScene = _s_uSharpVideo != null;
+            _s_vizVid = StrangeVizVid.IsInstalled ? StrangeVizVid.FindInScene() : null;
+            _s_vizVidInScene = _s_vizVid != null;
+            _s_yamaPlayer = StrangeYamaPlayer.IsInstalled ? StrangeYamaPlayer.FindInScene() : null;
+            _s_yamaPlayerInScene = _s_yamaPlayer != null;
+            _s_videoTXL = StrangeVideoTXL.IsInstalled ? StrangeVideoTXL.FindInScene() : null;
+            _s_videoTXLInScene = _s_videoTXL != null;
+
+            _s_videoPlayer = FindFirstObjectByType<BaseVRCVideoPlayer>(FindObjectsInactive.Include) as Component;
+            _s_mediaControls = _s_proTvInScene ? StrangeProTV.FindMediaControlsInScene() : null;
+            _s_audioLink = VideoPlayerUtil.IsAudioLinkInstalled
+                ? FindFirstObjectByType(VideoPlayerUtil.GetAudioLinkType()) as Component
+                : null;
+            _s_audioAdapter = _s_proTvInScene
+                ? FindFirstObjectByType(VideoPlayerUtil.FindTypeInAllAssemblies(StrangeProTV.AudioAdapterTypeName)) as Component
+                : null;
+            _s_hub = GetCachedHub();
+            _s_strangeVideo = FindFirstObjectByType<StrangeVideo>();
+
+            _statusCacheDirty = false;
+            _lastStatusUpdateTime = EditorApplication.timeSinceStartup;
+        }
 
         private void DrawSetupStatus()
         {
-            // Scan for current state
-            var tvManager = StrangeProTV.IsInstalled ? StrangeProTV.FindInScene() : null;
-            bool proTvInScene = tvManager != null;
-            var iwaSync3 = StrangeIwaSync3.IsInstalled ? StrangeIwaSync3.FindInScene() : null;
-            bool iwaSync3InScene = iwaSync3 != null;
-            var uSharpVideo = StrangeUSharpVideo.IsInstalled ? StrangeUSharpVideo.FindInScene() : null;
-            bool uSharpVideoInScene = uSharpVideo != null;
-            var vizVid = StrangeVizVid.IsInstalled ? StrangeVizVid.FindInScene() : null;
-            bool vizVidInScene = vizVid != null;
-            var yamaPlayer = StrangeYamaPlayer.IsInstalled ? StrangeYamaPlayer.FindInScene() : null;
-            bool yamaPlayerInScene = yamaPlayer != null;
-            var videoTXL = StrangeVideoTXL.IsInstalled ? StrangeVideoTXL.FindInScene() : null;
-            bool videoTXLInScene = videoTXL != null;
-
-            var videoPlayer = FindFirstObjectByType<BaseVRCVideoPlayer>(FindObjectsInactive.Include) as Component;
-            var mediaControls = proTvInScene ? StrangeProTV.FindMediaControlsInScene() : null;
-            var audioLink = VideoPlayerUtil.IsAudioLinkInstalled
-                ? FindFirstObjectByType(VideoPlayerUtil.GetAudioLinkType()) as Component
-                : null;
-            var audioAdapter = proTvInScene
-                ? FindFirstObjectByType(VideoPlayerUtil.FindTypeInAllAssemblies(StrangeProTV.AudioAdapterTypeName)) as Component
-                : null;
-            var hub = GetCachedHub();
-            var strangeVideo = FindFirstObjectByType<StrangeVideo>();
-
-            bool videoOk = videoPlayer != null || proTvInScene || iwaSync3InScene || uSharpVideoInScene || vizVidInScene || yamaPlayerInScene || videoTXLInScene;
-            bool audioLinkOk = audioLink != null;
-            bool hubOk = hub != null;
-            bool strangeVideoOk = strangeVideo != null && strangeVideo.primaryVideoPlayer != null && strangeVideo.strangeHub != null;
-
-            // Determine which player is active in the scene for the Fix button
-            string autoPlayerId = proTvInScene ? "protv" : iwaSync3InScene ? "iwasync3" : uSharpVideoInScene ? "usharpvideo" : vizVidInScene ? "vizvid" : yamaPlayerInScene ? "yamaplayer" : videoTXLInScene ? "videotxl" :
+            if (_statusCacheDirty || EditorApplication.timeSinceStartup - _lastStatusUpdateTime > 1.0)
+            {
+                UpdateStatusCache();
+            }
+            
+            bool videoOk = _s_videoPlayer != null || _s_proTvInScene || _s_iwaSync3InScene || _s_uSharpVideoInScene || _s_vizVidInScene || _s_yamaPlayerInScene || _s_videoTXLInScene;
+            bool audioLinkOk = _s_audioLink != null;
+            bool hubOk = _s_hub != null;
+            bool strangeVideoOk = _s_strangeVideo != null && _s_strangeVideo.primaryVideoPlayer != null && _s_strangeVideo.strangeHub != null;
+            
+            string autoPlayerId = _s_proTvInScene ? "protv" : _s_iwaSync3InScene ? "iwasync3" : _s_uSharpVideoInScene ? "usharpvideo" : _s_vizVidInScene ? "vizvid" : _s_yamaPlayerInScene ? "yamaplayer" : _s_videoTXLInScene ? "videotxl" :
                 StrangeProTV.IsInstalled ? "protv" : StrangeIwaSync3.IsInstalled ? "iwasync3" : StrangeUSharpVideo.IsInstalled ? "usharpvideo" : StrangeVizVid.IsInstalled ? "vizvid" : StrangeYamaPlayer.IsInstalled ? "yamaplayer" : StrangeVideoTXL.IsInstalled ? "videotxl" : "unity";
 
             EditorGUILayout.LabelField("Status", EditorStyles.boldLabel);
@@ -219,13 +267,13 @@ namespace StrangeToolkit
             // Video Player
             string videoName = "Not found";
             GameObject videoSelect = null;
-            if (proTvInScene) { videoName = tvManager.gameObject.name; videoSelect = tvManager.gameObject; }
-            else if (iwaSync3InScene) { videoName = iwaSync3.gameObject.name; videoSelect = iwaSync3.gameObject; }
-            else if (uSharpVideoInScene) { videoName = uSharpVideo.gameObject.name; videoSelect = uSharpVideo.gameObject; }
-            else if (vizVidInScene) { videoName = vizVid.gameObject.name; videoSelect = vizVid.gameObject; }
-            else if (yamaPlayerInScene) { videoName = yamaPlayer.gameObject.name; videoSelect = yamaPlayer.transform.root.gameObject; }
-            else if (videoTXLInScene) { videoName = videoTXL.gameObject.name; videoSelect = videoTXL.transform.root.gameObject; }
-            else if (videoPlayer != null) { videoName = videoPlayer.gameObject.name; videoSelect = videoPlayer.gameObject; }
+            if (_s_proTvInScene) { videoName = _s_tvManager.gameObject.name; videoSelect = _s_tvManager.gameObject; }
+            else if (_s_iwaSync3InScene) { videoName = _s_iwaSync3.gameObject.name; videoSelect = _s_iwaSync3.gameObject; }
+            else if (_s_uSharpVideoInScene) { videoName = _s_uSharpVideo.gameObject.name; videoSelect = _s_uSharpVideo.gameObject; }
+            else if (_s_vizVidInScene) { videoName = _s_vizVid.gameObject.name; videoSelect = _s_vizVid.gameObject; }
+            else if (_s_yamaPlayerInScene) { videoName = _s_yamaPlayer.gameObject.name; videoSelect = _s_yamaPlayer.transform.root.gameObject; }
+            else if (_s_videoTXLInScene) { videoName = _s_videoTXL.gameObject.name; videoSelect = _s_videoTXL.transform.root.gameObject; }
+            else if (_s_videoPlayer != null) { videoName = _s_videoPlayer.gameObject.name; videoSelect = _s_videoPlayer.gameObject; }
 
             DrawStatusRow(
                 videoOk,
@@ -236,14 +284,14 @@ namespace StrangeToolkit
             );
 
             // Media Controls (only when ProTV is actually in the scene)
-            if (proTvInScene)
+            if (_s_proTvInScene)
             {
-                bool mediaControlsOk = mediaControls != null;
+                bool mediaControlsOk = _s_mediaControls != null;
                 DrawStatusRow(
                     mediaControlsOk,
                     "Media Controls",
-                    mediaControlsOk ? mediaControls.gameObject.name : "Not found",
-                    mediaControlsOk ? mediaControls.gameObject : null,
+                    mediaControlsOk ? _s_mediaControls.gameObject.name : "Not found",
+                    mediaControlsOk ? _s_mediaControls.gameObject : null,
                     mediaControlsOk ? null : (System.Action)(() =>
                     {
                         var tv = StrangeProTV.FindInScene();
@@ -259,6 +307,7 @@ namespace StrangeToolkit
                             Undo.RegisterCreatedObjectUndo(go, "Add MediaControls");
                             StrangeProTV.RunBuildChecks();
                             StrangeToolkitLogger.LogSuccess("MediaControls added.");
+                            _statusCacheDirty = true;
                         }
                     })
                 );
@@ -274,13 +323,13 @@ namespace StrangeToolkit
                         audioLinkOk,
                         "AudioLink",
                         audioLinkOk ? "In scene" : "Not in scene",
-                        audioLinkOk ? audioLink.gameObject : null,
+                        audioLinkOk ? _s_audioLink.gameObject : null,
                         audioLinkOk ? null : (System.Action)(() =>
                         {
                             _cachedAudioLink = VideoPlayerUtil.FindOrCreateAudioLink();
                             if (_cachedAudioLink == null) return;
 
-                            if (proTvInScene)
+                            if (_s_proTvInScene)
                             {
                                 // ProTV: clear audioSource (AudioAdapter handles routing)
                                 var alSO = new SerializedObject(_cachedAudioLink);
@@ -289,7 +338,7 @@ namespace StrangeToolkit
                                 StrangeProTV.ConnectAudioAdapter();
                                 StrangeProTV.RunBuildChecks();
                             }
-                            else if (iwaSync3InScene)
+                            else if (_s_iwaSync3InScene)
                             {
                                 // iwaSync3: assign the Speaker's AudioSource
                                 var speakerAudio = StrangeIwaSync3.FindPrimarySpeakerAudioSource();
@@ -305,7 +354,7 @@ namespace StrangeToolkit
                                     StrangeToolkitLogger.LogWarning("No iwaSync3 Speaker found. AudioLink was added but no audio source was assigned.");
                                 }
                             }
-                            else if (uSharpVideoInScene)
+                            else if (_s_uSharpVideoInScene)
                             {
                                 // USharpVideo: assign main + optional right channel AudioSource
                                 StrangeUSharpVideo.FindAudioSources(out var uSharpMain, out var uSharpRight);
@@ -323,12 +372,12 @@ namespace StrangeToolkit
                                     StrangeToolkitLogger.LogWarning("No USharpVideo AudioSource found. AudioLink was added but no audio source was assigned.");
                                 }
                             }
-                            else if (vizVidInScene)
+                            else if (_s_vizVidInScene)
                             {
                                 // VizVid: assign AudioLink to Core's audioLink field (VizVid manages AudioSource internally)
                                 StrangeVizVid.AssignAudioLinkToCore(_cachedAudioLink);
                             }
-                            else if (yamaPlayerInScene)
+                            else if (_s_yamaPlayerInScene)
                             {
                                 // Yama Player: assign AudioLink to AudioLinkAdaptor module
                                 if (!StrangeYamaPlayer.AssignAudioLinkToAdaptor(_cachedAudioLink))
@@ -348,7 +397,7 @@ namespace StrangeToolkit
                                     }
                                 }
                             }
-                            else if (videoTXLInScene)
+                            else if (_s_videoTXLInScene)
                             {
                                 // VideoTXL: assign AudioLink to AudioManager's audioLinkSystem field
                                 if (!StrangeVideoTXL.AssignAudioLink(_cachedAudioLink))
@@ -368,26 +417,28 @@ namespace StrangeToolkit
                                     }
                                 }
                             }
-                            else if (videoPlayer != null)
+                            else if (_s_videoPlayer != null)
                             {
                                 // Unity Built-in: assign the video player's AudioSource
-                                VideoPlayerUtil.AssignAudioSourceToAudioLink(_cachedAudioLink, videoPlayer);
+                                VideoPlayerUtil.AssignAudioSourceToAudioLink(_cachedAudioLink, _s_videoPlayer);
                             }
+                            _statusCacheDirty = true;
                         })
                     );
 
                     // AudioAdapter (only when ProTV is in the scene and AudioLink is present)
-                    if (proTvInScene && audioLinkOk)
+                    if (_s_proTvInScene && audioLinkOk)
                     {
-                        bool audioAdapterOk = audioAdapter != null;
+                        bool audioAdapterOk = _s_audioAdapter != null;
                         DrawStatusRow(
                             audioAdapterOk,
                             "AudioAdapter",
-                            audioAdapterOk ? audioAdapter.gameObject.name : "Not connected",
-                            audioAdapterOk ? audioAdapter.gameObject : null,
+                            audioAdapterOk ? _s_audioAdapter.gameObject.name : "Not connected",
+                            audioAdapterOk ? _s_audioAdapter.gameObject : null,
                             audioAdapterOk ? null : (System.Action)(() =>
                             {
                                 StrangeProTV.ConnectAudioAdapter();
+                                _statusCacheDirty = true;
                             })
                         );
                     }
@@ -405,14 +456,15 @@ namespace StrangeToolkit
                 DrawStatusRow(
                     hubOk,
                     "StrangeHub",
-                    hubOk ? hub.gameObject.name : "Not found",
-                    hubOk ? hub.gameObject : null,
+                    hubOk ? _s_hub.gameObject.name : "Not found",
+                    hubOk ? _s_hub.gameObject : null,
                     hubOk ? null : (System.Action)(() =>
                     {
                         var hubGO = new GameObject("StrangeHub");
                         hubGO.AddComponent<UdonBehaviour>().gameObject.AddComponent<StrangeHub>();
                         Undo.RegisterCreatedObjectUndo(hubGO, "Create StrangeHub");
                         _cachedHub = null;
+                        _statusCacheDirty = true;
                         StrangeToolkitLogger.LogSuccess("StrangeHub created.");
                     })
                 );
@@ -421,8 +473,8 @@ namespace StrangeToolkit
                 DrawStatusRow(
                     strangeVideoOk,
                     "StrangeVideo",
-                    strangeVideoOk ? "Configured" : (strangeVideo != null ? "Not wired" : "Not found"),
-                    strangeVideo != null ? strangeVideo.gameObject : null,
+                    strangeVideoOk ? "Configured" : (_s_strangeVideo != null ? "Not wired" : "Not found"),
+                    _s_strangeVideo != null ? _s_strangeVideo.gameObject : null,
                     strangeVideoOk ? null : (System.Action)(() =>
                     {
                         FixStrangeVideoWiring();
@@ -531,6 +583,7 @@ namespace StrangeToolkit
             }
 
             Undo.CollapseUndoOperations(undoGroup);
+            _statusCacheDirty = true;
             StrangeToolkitLogger.LogSuccess("Video player added to scene.");
         }
 
@@ -565,6 +618,7 @@ namespace StrangeToolkit
             strangeVideo.strangeHub = hub;
             strangeVideo.useBuiltInSync = !StrangeProTV.IsInstalled && !StrangeIwaSync3.IsInstalled && !StrangeUSharpVideo.IsInstalled && !StrangeVizVid.IsInstalled && !StrangeYamaPlayer.IsInstalled && !StrangeVideoTXL.IsInstalled;
             EditorUtility.SetDirty(strangeVideo);
+            _statusCacheDirty = true;
             StrangeToolkitLogger.LogSuccess("StrangeVideo wiring fixed.");
         }
 
@@ -673,7 +727,11 @@ namespace StrangeToolkit
             var componentsToDestroy = satellite.GetComponentsInChildren<Component>(true).Where(c =>
                 !(c is Transform) &&
                 !(c is MeshFilter) &&
-                !(c is MeshRenderer)
+                !(c is MeshRenderer) &&
+                !(c is Collider) &&
+                !(c is Collider2D) &&
+                !(c is RectTransform) &&
+                !(c is CanvasRenderer)
             ).ToArray();
 
             foreach(var comp in componentsToDestroy)
