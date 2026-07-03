@@ -20,6 +20,7 @@
   - Texture transfer now recognizes a much wider range of shader/studio naming conventions (not just standard names like `_MainTex`), so albedo, normal, and height maps carry over correctly on far more third-party shaders, including ShaderGraph-based asset packs
   - Packed ORM (Occlusion/Roughness/Metallic) textures are now detected and can optionally be transferred into the Metallic slot via a new toggle - off by default since channel packing may not match the target shader, and flagged with a console warning when detected
   - Alpha cutout and two-sided rendering settings now carry over automatically when swapping into Standard or Bakery/Standard, so cutout foliage and double-sided cards no longer render as solid blocky rectangles after a swap
+  - The swap button now shows a tooltip reminding you that results may not look identical to the original, since different shaders render color, lighting, and textures differently
 
 ### Changed
 - Material Manager's isolate mode ("Whitelist") is now the default. Previously, dragging objects/materials into the target list *protected* them and swapped everything else in the scene instead of isolating just those - the opposite of what most people expected

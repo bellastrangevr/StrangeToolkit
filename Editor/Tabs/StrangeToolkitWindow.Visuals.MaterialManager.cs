@@ -118,7 +118,11 @@ namespace StrangeToolkit
                         _transferOrmMaps);
 
                     string actionText = _useWhitelistMode ? "Apply to Whitelist" : "Apply to All (Except Blacklist)";
-                    if (GUILayout.Button(actionText, EditorStyles.miniButton))
+                    if (GUILayout.Button(
+                        new GUIContent(actionText,
+                            "Heads up: no two shaders render a texture identically — lighting, color handling, and channel packing all differ. " +
+                            "Expect some visual differences after the swap, and give affected materials a once-over before moving on."),
+                        EditorStyles.miniButton))
                     {
                         MassChangeShaders(_sortedShaderNames[_selectedShaderIndex]);
                     }
