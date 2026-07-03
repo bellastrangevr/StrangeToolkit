@@ -94,4 +94,14 @@ public class StrangeVideo : UdonSharpBehaviour
             strangeHub.RequestSerialization();
         }
     }
+
+    public override void OnMasterTransferred(VRCPlayerApi player)
+    {
+        // The sync loop is only ever started from Start() for whoever was master at world load.
+        // Restart it here for the new master, otherwise sync corrections stop forever after a master migration.
+        if (useBuiltInSync && Networking.IsMaster)
+        {
+            SendCustomEventDelayedSeconds(nameof(_CheckVideoSync), syncCheckInterval);
+        }
+    }
 }

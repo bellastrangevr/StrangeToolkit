@@ -78,8 +78,6 @@ namespace StrangeToolkit
         private Vector2 _nonStaticObjectsScrollPos;
         private Vector2 _brokenStaticScrollPos;
 
-        private VisualsSnapshot _lastSnapshot = null;
-
         // Asset weight data
         private class HeavyMesh { public GameObject obj; public long triCount; public long memSize; }
         private class HeavyTexture { public Texture tex; public long memSize; public long vramSize; public bool isCompressed; public string compressionFormat; public int width; public int height; public string assetPath; }
@@ -115,7 +113,7 @@ namespace StrangeToolkit
         private enum ColliderOption { None, Box, Sphere, Capsule, MeshCollider }
         private ColliderOption _toggleColliderOption = ColliderOption.Box;
 
-        [SerializeField] private bool _useWhitelistMode = false;
+        [SerializeField] private bool _useWhitelistMode = true;
         [SerializeField] private List<TargetEntry> _targetObjects = new List<TargetEntry>();
         [SerializeField] private List<Material> _targetMaterials = new List<Material>();
 

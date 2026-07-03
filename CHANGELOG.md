@@ -1,6 +1,6 @@
 # Changelog
 
-## [2.1.0] - 2026-02-09
+## [2.1.0] - 2026-07-02
 
 ### Added
 - **StrangeVideo** - UdonSharp component for video player management
@@ -16,6 +16,20 @@
   - Per-player inline settings (autoplay, sync, security, media options, optional components, etc.)
   - Debug overrides panel for testing without packages installed
   - StrangeHub video timestamp sync (synced field for video state)
+- **Smarter Material Manager / Shader Swapper**
+  - Texture transfer now recognizes a much wider range of shader/studio naming conventions (not just standard names like `_MainTex`), so albedo, normal, and height maps carry over correctly on far more third-party shaders, including ShaderGraph-based asset packs
+  - Packed ORM (Occlusion/Roughness/Metallic) textures are now detected and can optionally be transferred into the Metallic slot via a new toggle - off by default since channel packing may not match the target shader, and flagged with a console warning when detected
+  - Alpha cutout and two-sided rendering settings now carry over automatically when swapping into Standard or Bakery/Standard, so cutout foliage and double-sided cards no longer render as solid blocky rectangles after a swap
+
+### Changed
+- Material Manager's isolate mode ("Whitelist") is now the default. Previously, dragging objects/materials into the target list *protected* them and swapped everything else in the scene instead of isolating just those - the opposite of what most people expected
+
+### Fixed
+- Materials on disabled/inactive objects were silently skipped during a shader swap (both isolate and "apply to all" modes) - toggle systems and hidden props are now included correctly
+- Leftover shader keywords from the original shader no longer linger on a material after swapping
+- Fixed a texture-matching collision where a color/albedo texture could occasionally get pulled into the Metallic slot instead of its own
+- If the world's instance master left, built-in video sync would silently and permanently stop working for everyone else for the rest of the instance - it now correctly resumes for whoever becomes the new master
+- In-editor video URL testing could fire a duplicate, contradictory result after a failed resolve (or for non-HTTPS sources), sometimes trying to load an error message as if it were a video URL
 
 ## [2.0.0] - 2026-01-31
 

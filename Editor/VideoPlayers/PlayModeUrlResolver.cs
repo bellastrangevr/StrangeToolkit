@@ -228,7 +228,7 @@ namespace StrangeToolkit
             if (!originalUrl.StartsWith("https://"))
             {
                 urlResolvedCallback(originalUrl);
-                yield return null;
+                yield break;
             }
 
             while (!ytdlProcess.HasExited)
@@ -253,7 +253,7 @@ namespace StrangeToolkit
             {
                 Debug.LogError($"[<color=#9C6994>Strange Video</color>] {line.Substring(ErrorText.Length)}");
                 errorCallback(VideoError.PlayerError);
-                yield return null;
+                yield break;
             }
 
             while (!foundError && !stdout.EndOfStream)

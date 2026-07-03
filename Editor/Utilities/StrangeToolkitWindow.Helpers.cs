@@ -66,7 +66,6 @@ namespace StrangeToolkit
             _usingBuildData = false;
             _buildDataSize = "";
             _occlusionSize = 0;
-            _lastSnapshot = null;
             _shadersLoaded = false;
             ScanForExpansions();
             Repaint();
