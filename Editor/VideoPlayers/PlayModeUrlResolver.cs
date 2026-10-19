@@ -203,6 +203,24 @@ namespace StrangeToolkit
                 return;
             }
 
+            string rawUrl = url?.Get();
+
+            // Only https links go through yt-dlp; anything else plays as-is, as before
+            if (!VideoUrlSafety.NeedsResolve(rawUrl))
+            {
+                urlResolvedCallback(rawUrl);
+                return;
+            }
+
+            // The URL is untrusted input (scene data, prefabs, shared playlists): refuse anything
+            // that could add yt-dlp options such as --exec
+            if (!VideoUrlSafety.TryGetSafeHttpsUrl(rawUrl, out string safeUrl))
+            {
+                Debug.LogError($"[<color=#9C6994>Strange Video</color>] Refused to resolve an unsafe URL (quotes, spaces or other special characters): '{rawUrl}'");
+                errorCallback(VideoError.InvalidURL);
+                return;
+            }
+
             var ytdlProcess = new System.Diagnostics.Process();
             ytdlProcess.StartInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
             ytdlProcess.StartInfo.CreateNoWindow = true;
@@ -210,14 +228,15 @@ namespace StrangeToolkit
             ytdlProcess.StartInfo.RedirectStandardOutput = true;
             ytdlProcess.StartInfo.RedirectStandardError = true;
             ytdlProcess.StartInfo.FileName = _ytdlPath;
-            ytdlProcess.StartInfo.Arguments = $"--no-check-certificate --no-cache-dir --rm-cache-dir -f \"mp4[height<=?{resolution}]/best[height<=?{resolution}]\" --get-url \"{url}\"";
+            // "--" ends option parsing so the URL can only ever be read as a URL
+            ytdlProcess.StartInfo.Arguments = $"--no-cache-dir --rm-cache-dir -f \"mp4[height<=?{resolution}]/best[height<=?{resolution}]\" --get-url -- \"{safeUrl}\"";
 
-            Debug.Log($"[<color=#9C6994>Strange Video</color>] Resolving URL '{url}'");
+            Debug.Log($"[<color=#9C6994>Strange Video</color>] Resolving URL '{safeUrl}'");
 
             ytdlProcess.Start();
             RunningProcesses.Add(ytdlProcess);
 
-            ((MonoBehaviour)videoPlayer).StartCoroutine(URLResolveCoroutine(url.ToString(), ytdlProcess, videoPlayer, urlResolvedCallback, errorCallback));
+            ((MonoBehaviour)videoPlayer).StartCoroutine(URLResolveCoroutine(safeUrl, ytdlProcess, videoPlayer, urlResolvedCallback, errorCallback));
             RegisteredBehaviours.Add((MonoBehaviour)videoPlayer);
         }
 
