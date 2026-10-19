@@ -125,6 +125,9 @@ namespace StrangeToolkit
             var pFogStarts = so.FindProperty("atmoFogStarts");
             var pFogEnds = so.FindProperty("atmoFogEnds");
             var pRoots = so.FindProperty("atmoRoots");
+            var pControlClip = so.FindProperty("atmoControlClip");
+            var pNearClips = so.FindProperty("atmoNearClips");
+            var pFarClips = so.FindProperty("atmoFarClips");
 
             int count = pNames.arraySize;
             SyncAtmosphereArrays(so, count);
@@ -142,6 +145,8 @@ namespace StrangeToolkit
             if (_showAtmospheres)
             {
                 GUILayout.Space(3);
+
+                DrawClippingSection();
 
                 if (_atmoPreviewSnapshot != null)
                 {
@@ -216,6 +221,30 @@ namespace StrangeToolkit
                         EditorGUI.indentLevel--;
                     }
 
+                    var clipProp = pControlClip.GetArrayElementAtIndex(i);
+                    clipProp.boolValue = EditorGUILayout.ToggleLeft(new GUIContent("Control Clipping",
+                        "Off: this preset keeps the Reference Camera's near/far clip. Applied in-game through VRChat's camera settings."), clipProp.boolValue);
+                    if (clipProp.boolValue)
+                    {
+                        EditorGUI.indentLevel++;
+                        var nearProp = pNearClips.GetArrayElementAtIndex(i);
+                        var farProp = pFarClips.GetArrayElementAtIndex(i);
+                        nearProp.floatValue = Mathf.Clamp(EditorGUILayout.FloatField(new GUIContent("Near", $"VRChat clamps this to {VrcMinNearClip}-{VrcMaxNearClip}"), nearProp.floatValue), VrcMinNearClip, VrcMaxNearClip);
+                        farProp.floatValue = Mathf.Max(EditorGUILayout.FloatField("Far", farProp.floatValue), nearProp.floatValue + VrcMinClipGap);
+
+                        DrawFogClipCoupling(PresetFogHiddenDistance(so, i), farProp.floatValue, "this preset's fog", newFar => farProp.floatValue = newFar);
+
+                        Camera refCam = GetReferenceCamera(out _, out _);
+                        GUI.enabled = refCam != null;
+                        if (GUILayout.Button("Copy From Reference Camera", EditorStyles.miniButton))
+                        {
+                            nearProp.floatValue = Mathf.Clamp(refCam.nearClipPlane, VrcMinNearClip, VrcMaxNearClip);
+                            farProp.floatValue = refCam.farClipPlane;
+                        }
+                        GUI.enabled = true;
+                        EditorGUI.indentLevel--;
+                    }
+
                     EditorGUILayout.PropertyField(pRoots.GetArrayElementAtIndex(i), new GUIContent("Root Object"));
 
                     EditorGUI.indentLevel--;
@@ -226,7 +255,7 @@ namespace StrangeToolkit
                         if (mismatch != null)
                         {
                             EditorGUILayout.HelpBox("In-game this preset will look different from the editor: " + mismatch +
-                                " Use 'Copy From Scene Fog' to match the editor, or 'View' to see the in-game look.", MessageType.Warning);
+                                " Use 'Copy From Scene Fog' / 'Copy From Reference Camera' to match the editor, or 'View' to see the in-game fog.", MessageType.Warning);
                         }
                     }
 
@@ -314,11 +343,22 @@ namespace StrangeToolkit
         }
 
         // Returns a short description of how the default preset differs from the scene's own fog, or null if it matches
-        private static string DescribeDefaultAtmosphereMismatch(SerializedObject so, int index)
+        private string DescribeDefaultAtmosphereMismatch(SerializedObject so, int index)
         {
-            if (!so.FindProperty("atmoControlFog").GetArrayElementAtIndex(index).boolValue) return null;
-
             var diffs = new List<string>();
+
+            if (so.FindProperty("atmoControlClip").GetArrayElementAtIndex(index).boolValue)
+            {
+                Camera cam = GetReferenceCamera(out _, out _);
+                float near = so.FindProperty("atmoNearClips").GetArrayElementAtIndex(index).floatValue;
+                float far = so.FindProperty("atmoFarClips").GetArrayElementAtIndex(index).floatValue;
+                if (cam != null && (!Mathf.Approximately(near, cam.nearClipPlane) || !Mathf.Approximately(far, cam.farClipPlane)))
+                    diffs.Add($"clipping {near:0.###}-{far:0.#} vs Reference Camera {cam.nearClipPlane:0.###}-{cam.farClipPlane:0.#}");
+            }
+
+            if (!so.FindProperty("atmoControlFog").GetArrayElementAtIndex(index).boolValue)
+                return diffs.Count == 0 ? null : string.Join(", ", diffs) + ".";
+
             int mode = so.FindProperty("atmoFogModes").GetArrayElementAtIndex(index).intValue;
             FogMode effectiveMode = mode > 0 ? (FogMode)mode : RenderSettings.fogMode;
 
@@ -344,6 +384,22 @@ namespace StrangeToolkit
             }
 
             return diffs.Count == 0 ? null : string.Join(", ", diffs) + ".";
+        }
+
+        // Where this preset's fog fully hides geometry in-game (falls back to the scene's fog when the preset doesn't control it)
+        private static float PresetFogHiddenDistance(SerializedObject so, int index)
+        {
+            if (!so.FindProperty("atmoControlFog").GetArrayElementAtIndex(index).boolValue)
+                return FogHiddenDistance(RenderSettings.fog, RenderSettings.fogMode, RenderSettings.fogDensity,
+                    RenderSettings.fogStartDistance, RenderSettings.fogEndDistance);
+
+            int mode = so.FindProperty("atmoFogModes").GetArrayElementAtIndex(index).intValue;
+            float start = so.FindProperty("atmoFogStarts").GetArrayElementAtIndex(index).floatValue;
+            float end = so.FindProperty("atmoFogEnds").GetArrayElementAtIndex(index).floatValue;
+            // Matches StrangeHub: distances only override the scene's when end > start
+            if (end <= start) { start = RenderSettings.fogStartDistance; end = RenderSettings.fogEndDistance; }
+            return FogHiddenDistance(true, mode > 0 ? (FogMode)mode : RenderSettings.fogMode,
+                so.FindProperty("atmoFogDensities").GetArrayElementAtIndex(index).floatValue, start, end);
         }
 
         private void AddAtmosphere(SerializedObject so)
@@ -375,17 +431,21 @@ namespace StrangeToolkit
         private static readonly string[] _atmoArrayNames =
         {
             "atmoNames", "atmoIsDefault", "atmoSkyboxes", "atmoControlFog", "atmoFogColors",
-            "atmoFogDensities", "atmoFogModes", "atmoFogStarts", "atmoFogEnds", "atmoRoots"
+            "atmoFogDensities", "atmoFogModes", "atmoFogStarts", "atmoFogEnds", "atmoRoots",
+            "atmoControlClip", "atmoNearClips", "atmoFarClips"
         };
 
         // Keeps every parallel array the same length. Older hubs have no fog mode/distance arrays yet;
         // those entries are filled with 0 ("keep scene mode") and the scene's distances so existing presets behave as before.
-        private static void SyncAtmosphereArrays(SerializedObject so, int targetCount)
+        private void SyncAtmosphereArrays(SerializedObject so, int targetCount)
         {
+            Camera refCam = null;
+            bool refCamLooked = false;
             foreach (string name in _atmoArrayNames)
             {
                 var prop = so.FindProperty(name);
                 if (prop.arraySize == targetCount) continue;
+                if (!refCamLooked) { refCam = GetReferenceCamera(out _, out _); refCamLooked = true; }
 
                 int oldSize = prop.arraySize;
                 prop.arraySize = targetCount;
@@ -394,6 +454,9 @@ namespace StrangeToolkit
                     if (name == "atmoFogStarts") prop.GetArrayElementAtIndex(i).floatValue = RenderSettings.fogStartDistance;
                     else if (name == "atmoFogEnds") prop.GetArrayElementAtIndex(i).floatValue = RenderSettings.fogEndDistance;
                     else if (name == "atmoFogModes") prop.GetArrayElementAtIndex(i).intValue = 0;
+                    else if (name == "atmoControlClip") prop.GetArrayElementAtIndex(i).boolValue = false;
+                    else if (name == "atmoNearClips") prop.GetArrayElementAtIndex(i).floatValue = refCam != null ? Mathf.Clamp(refCam.nearClipPlane, VrcMinNearClip, VrcMaxNearClip) : 0.01f;
+                    else if (name == "atmoFarClips") prop.GetArrayElementAtIndex(i).floatValue = refCam != null ? refCam.farClipPlane : 1000f;
                 }
             }
         }

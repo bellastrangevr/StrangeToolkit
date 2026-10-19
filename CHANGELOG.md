@@ -10,6 +10,11 @@
 ### Added
 - Atmosphere presets can set fog mode (including Linear / distance fog with start and end), or keep the scene's mode
 - "Copy From Scene Fog" button per preset
+- **Clipping distance in the Atmosphere section**
+  - Near/far fields edit the scene descriptor's Reference Camera, which VRChat copies to every player on load. Offers "Use Main Camera" or "Create Reference Camera" when none is assigned
+  - Per-preset "Control Clipping" applies near/far in-game through `VRCCameraSettings.ScreenCamera`. Presets that don't control it restore the Reference Camera's values
+  - Near is clamped to VRChat's 0.001-0.05 range and far to at least near + 0.1
+  - Fog coupling: warns when far clip cuts geometry before the fog hides it (hard edge), or when far clip renders well past full fog, with a one-click "Set Far Clip" fix
 - Warning on the default preset when its fog differs from the scene's Lighting settings, which is why the game and the editor looked different
 - View / Restore preview that always puts the scene's own sky and fog back
 - `STRANGE_DISABLE_AVPRO` scripting define: add it in Player Settings to switch off all AVPro-dependent code (in-editor video playback and the audio shim) if an AVPro or VRChat SDK version mismatch stops the toolkit from compiling

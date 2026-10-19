@@ -2,6 +2,7 @@
 using UdonSharp;
 using VRC.SDKBase;
 using VRC.Udon;
+using VRC.SDK3.Rendering;
 
 [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
 public class StrangeHub : UdonSharpBehaviour
@@ -21,6 +22,10 @@ public class StrangeHub : UdonSharpBehaviour
     public int[] atmoFogModes;
     public float[] atmoFogStarts;
     public float[] atmoFogEnds;
+    // Camera clipping per atmosphere, applied through VRCCameraSettings.ScreenCamera
+    public bool[] atmoControlClip;
+    public float[] atmoNearClips;
+    public float[] atmoFarClips;
     
     public GameObject[] atmoRoots;
 
@@ -90,6 +95,9 @@ public class StrangeHub : UdonSharpBehaviour
     private float _baseFogDensity;
     private float _baseFogStart;
     private float _baseFogEnd;
+    private bool _hasClipBaseline;
+    private float _baseNearClip;
+    private float _baseFarClip;
 
     private void CaptureBaseline()
     {
@@ -100,6 +108,16 @@ public class StrangeHub : UdonSharpBehaviour
         _baseFogDensity = RenderSettings.fogDensity;
         _baseFogStart = RenderSettings.fogStartDistance;
         _baseFogEnd = RenderSettings.fogEndDistance;
+
+        // The player camera already carries the Reference Camera's clipping by the time Start runs.
+        // ScreenCamera is null outside a client (e.g. the dashboard preview in edit mode).
+        VRCCameraSettings screenCamera = VRCCameraSettings.ScreenCamera;
+        _hasClipBaseline = screenCamera != null;
+        if (_hasClipBaseline)
+        {
+            _baseNearClip = screenCamera.NearClipPlane;
+            _baseFarClip = screenCamera.FarClipPlane;
+        }
         _baselineCaptured = true;
     }
 
@@ -125,6 +143,29 @@ public class StrangeHub : UdonSharpBehaviour
                 }
             }
         }
+    }
+
+    private void ApplyClipping(int index)
+    {
+        if (!_hasClipBaseline) return;
+        VRCCameraSettings screenCamera = VRCCameraSettings.ScreenCamera;
+        if (screenCamera == null) return;
+
+        float nearClip = _baseNearClip;
+        float farClip = _baseFarClip;
+        if (atmoControlClip != null && index < atmoControlClip.Length && atmoControlClip[index]
+            && atmoNearClips != null && index < atmoNearClips.Length
+            && atmoFarClips != null && index < atmoFarClips.Length
+            && atmoFarClips[index] > atmoNearClips[index])
+        {
+            nearClip = atmoNearClips[index];
+            farClip = atmoFarClips[index];
+        }
+
+        // Near first: VRChat clamps far to at least near + 0.1, and clamps near to 0.001-0.05
+        // (the user's "Forced Camera Near Distance" setting can still override near)
+        screenCamera.NearClipPlane = nearClip;
+        screenCamera.FarClipPlane = farClip;
     }
 
     public void NextAtmosphere()
@@ -175,6 +216,8 @@ public class StrangeHub : UdonSharpBehaviour
         RenderSettings.fogDensity = fogDensity;
         RenderSettings.fogStartDistance = fogStart;
         RenderSettings.fogEndDistance = fogEnd;
+
+        ApplyClipping(index);
 
         if (atmoRoots != null)
         {
