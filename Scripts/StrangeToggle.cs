@@ -34,6 +34,8 @@ public class StrangeToggle : UdonSharpBehaviour
 
     private bool _isOn;
     private MaterialPropertyBlock _mpb;
+    // PlayerData may only be used after VRChat restores the local player's saved data
+    private bool _persistenceReady;
 
     void Start()
     {
@@ -44,11 +46,6 @@ public class StrangeToggle : UdonSharpBehaviour
             // Global sync mode: use synced state (default starts as defaultOn)
             _isOn = defaultOn;
             _syncedState = defaultOn;
-        }
-        else if (hub != null && usePersistence)
-        {
-            // Persistence mode: load from player data
-            _isOn = hub.LoadToggleState(persistenceID, defaultOn);
         }
         else
         {
@@ -116,7 +113,7 @@ public class StrangeToggle : UdonSharpBehaviour
             UpdateVisuals();
             PlaySound();
 
-            if (hub != null && usePersistence)
+            if (hub != null && usePersistence && _persistenceReady)
             {
                 hub.SaveToggleState(persistenceID, _isOn);
             }
@@ -166,15 +163,23 @@ public class StrangeToggle : UdonSharpBehaviour
         }
     }
 
-    // Called by Hub when OnPlayerRestored fires
+    public override void OnPlayerRestored(VRCPlayerApi player)
+    {
+        if (!player.isLocal) return;
+        _persistenceReady = true;
+        RefreshPersistence();
+    }
+
+    // Applies the saved state once the local player's data is restored. A toggle flipped before
+    // that keeps its state if nothing was saved yet.
     public void RefreshPersistence()
     {
         // Only applies to persistence mode
-        if (useGlobalSync) return;
+        if (useGlobalSync || !_persistenceReady) return;
 
         if (hub != null && usePersistence)
         {
-            bool savedState = hub.LoadToggleState(persistenceID, defaultOn);
+            bool savedState = hub.LoadToggleState(persistenceID, _isOn);
             if (savedState != _isOn)
             {
                 _isOn = savedState;

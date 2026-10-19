@@ -3,6 +3,7 @@ using UdonSharp;
 using VRC.SDKBase;
 using VRC.Udon;
 using VRC.SDK3.Rendering;
+using VRC.SDK3.Persistence;
 
 [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
 public class StrangeHub : UdonSharpBehaviour
@@ -29,58 +30,25 @@ public class StrangeHub : UdonSharpBehaviour
     
     public GameObject[] atmoRoots;
 
-    // Toggle persistence
-    private string[] _toggleIDs;
-    private bool[] _toggleValues;
-    private int _toggleCount = 0;
-    private const int CHUNK_SIZE = 32;
-    
+    // Toggle persistence, stored per player in VRChat PlayerData so it survives rejoining the world.
+    // Callers must wait for OnPlayerRestored before saving or loading (see StrangeToggle).
+    private const string TogglePersistencePrefix = "StrangeToggle/";
+
     public void SaveToggleState(string id, bool state)
     {
-        if (_toggleIDs == null)
-        {
-            _toggleIDs = new string[CHUNK_SIZE];
-            _toggleValues = new bool[CHUNK_SIZE];
-            _toggleCount = 0;
-        }
-
-        for (int i = 0; i < _toggleCount; i++)
-        {
-            if (_toggleIDs[i] == id)
-            {
-                _toggleValues[i] = state;
-                return;
-            }
-        }
-
-        // Expand arrays if needed
-        if (_toggleCount >= _toggleIDs.Length)
-        {
-            string[] newIDs = new string[_toggleIDs.Length + CHUNK_SIZE];
-            bool[] newVals = new bool[_toggleValues.Length + CHUNK_SIZE];
-            for(int i = 0; i < _toggleIDs.Length; i++)
-            {
-                newIDs[i] = _toggleIDs[i];
-                newVals[i] = _toggleValues[i];
-            }
-            
-            _toggleIDs = newIDs;
-            _toggleValues = newVals;
-        }
-
-        _toggleIDs[_toggleCount] = id;
-        _toggleValues[_toggleCount] = state;
-        _toggleCount++;
+        if (string.IsNullOrEmpty(id)) return;
+        PlayerData.SetBool(TogglePersistencePrefix + id, state);
     }
 
-    public bool LoadToggleState(string id, bool defaultState)
+    public bool LoadToggleState(string id, bool fallback)
     {
-        if (_toggleIDs == null) return defaultState;
-        for (int i = 0; i < _toggleCount; i++)
-        {
-            if (_toggleIDs[i] == id) return _toggleValues[i];
-        }
-        return defaultState;
+        if (string.IsNullOrEmpty(id)) return fallback;
+        VRCPlayerApi localPlayer = Networking.LocalPlayer;
+        if (localPlayer == null) return fallback;
+
+        bool saved;
+        if (PlayerData.TryGetBool(localPlayer, TogglePersistencePrefix + id, out saved)) return saved;
+        return fallback;
     }
 
     private int _currentIndex = 0;
