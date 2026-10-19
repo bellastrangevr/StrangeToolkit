@@ -76,7 +76,7 @@ namespace StrangeToolkit
 
         public static GameObject InstantiatePrefab()
         {
-            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath);
+            var prefab = PrefabLocator.Load(PrefabPath);
             if (prefab == null) return null;
             return (GameObject)PrefabUtility.InstantiatePrefab(prefab);
         }

@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Get Version
         id: version
@@ -36,7 +36,7 @@ jobs:
 
       - name: Check If Release Tag Exists
         id: checkReleaseTag
-        uses: mukunku/tag-exists-action@v1.6.0
+        uses: mukunku/tag-exists-action@bdad1eaa119ce71b150b952c97351c75025c06a9 # v1.6.0
         with:
           tag: ${{ steps.tag.outputs.prop }}
 
@@ -47,7 +47,7 @@ jobs:
 
       - name: Set ZIP Url
         if: ${{ steps.checkReleaseTag.outputs.exists == 'false' }}
-        uses: jossef/action-set-json-field@v2.1
+        uses: jossef/action-set-json-field@7ea163261afe43847c06afab44419845339a6be2 # v2.1
         with:
           file: ./package.json
           field: url
@@ -111,7 +111,7 @@ jobs:
 
       - name: Make Release
         if: ${{ steps.checkReleaseTag.outputs.exists == 'false' }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           name: "${{ env.packageFileName }} v${{ steps.version.outputs.value }}"
           tag_name: "v${{ steps.version.outputs.value }}"

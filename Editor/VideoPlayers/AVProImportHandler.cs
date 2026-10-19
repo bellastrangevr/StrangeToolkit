@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -96,29 +97,33 @@ namespace StrangeToolkit
             _hasCheckedDefines = true;
         }
 
-        private static bool HasScriptingDefine(string name)
+        // Defines are kept the same on every platform VRChat worlds build for, so switching
+        // between PC and Android/iOS never changes which code compiles
+        private static readonly NamedBuildTarget[] DefineTargets =
         {
-            BuildTargetGroup group = BuildPipeline.GetBuildTargetGroup(EditorUserBuildSettings.activeBuildTarget);
-            string[] defines = PlayerSettings.GetScriptingDefineSymbolsForGroup(group).Split(';');
-            return defines.Contains(name, StringComparer.OrdinalIgnoreCase);
-        }
+            NamedBuildTarget.Standalone, NamedBuildTarget.Android, NamedBuildTarget.iOS
+        };
 
         private static void AddScriptingDefine(string name)
         {
-            if (HasScriptingDefine(name)) return;
-            BuildTargetGroup group = BuildPipeline.GetBuildTargetGroup(EditorUserBuildSettings.activeBuildTarget);
-            string[] defines = PlayerSettings.GetScriptingDefineSymbolsForGroup(group).Split(';');
-            defines = defines.Append(name).ToArray();
-            PlayerSettings.SetScriptingDefineSymbolsForGroup(group, string.Join(";", defines));
+            foreach (var target in DefineTargets)
+            {
+                var defines = PlayerSettings.GetScriptingDefineSymbols(target).Split(';').Where(d => d.Length > 0).ToList();
+                if (defines.Contains(name, StringComparer.OrdinalIgnoreCase)) continue;
+                defines.Add(name);
+                PlayerSettings.SetScriptingDefineSymbols(target, string.Join(";", defines));
+            }
         }
 
         private static void RemoveScriptingDefine(string name)
         {
-            if (!HasScriptingDefine(name)) return;
-            BuildTargetGroup group = BuildPipeline.GetBuildTargetGroup(EditorUserBuildSettings.activeBuildTarget);
-            string[] defines = PlayerSettings.GetScriptingDefineSymbolsForGroup(group).Split(';');
-            defines = defines.Where(s => s != name).ToArray();
-            PlayerSettings.SetScriptingDefineSymbolsForGroup(group, string.Join(";", defines));
+            foreach (var target in DefineTargets)
+            {
+                var defines = PlayerSettings.GetScriptingDefineSymbols(target).Split(';').ToList();
+                if (!defines.Contains(name, StringComparer.OrdinalIgnoreCase)) continue;
+                defines.RemoveAll(d => string.Equals(d, name, StringComparison.OrdinalIgnoreCase));
+                PlayerSettings.SetScriptingDefineSymbols(target, string.Join(";", defines));
+            }
         }
 
         /// <summary>

@@ -29,7 +29,7 @@ namespace StrangeToolkit
             }
 
             // 2. Pre-Flight Calculation
-            Renderer[] renderers = Object.FindObjectsOfType<Renderer>(true);
+            Renderer[] renderers = Object.FindObjectsByType<Renderer>(FindObjectsInactive.Include, FindObjectsSortMode.None);
             HashSet<Material> uniqueMaterials = new HashSet<Material>();
             foreach (var r in renderers)
             {
@@ -146,7 +146,7 @@ namespace StrangeToolkit
                 }
 
                 // Remap Renderers
-                Renderer[] newRenderers = Object.FindObjectsOfType<Renderer>(true);
+                Renderer[] newRenderers = Object.FindObjectsByType<Renderer>(FindObjectsInactive.Include, FindObjectsSortMode.None);
                 foreach (var r in newRenderers)
                 {
                     Material[] sharedMats = r.sharedMaterials;

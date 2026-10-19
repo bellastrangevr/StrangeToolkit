@@ -3,11 +3,9 @@
     "rootNamespace": "StrangeToolkit",
     "references": [
         "VRC.Udon",
-        "VRC.Udon.Editor",
         "VRC.Udon.Serialization.OdinSerializer",
         "UdonSharp.Runtime",
         "UdonSharp.Lib",
-        "UdonSharp.Editor",
         "AVProVideo.Runtime"
     ],
     "includePlatforms": [],

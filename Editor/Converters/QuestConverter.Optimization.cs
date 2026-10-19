@@ -235,7 +235,7 @@ namespace StrangeToolkit
             System.Type volType = System.Type.GetType("UnityEngine.Rendering.Volume, Unity.RenderPipelines.Core.Runtime");
             if (volType != null)
             {
-                var volumes = Object.FindObjectsOfType(volType);
+                var volumes = Object.FindObjectsByType(volType, FindObjectsSortMode.None);
                 foreach (var obj in volumes) if (obj is Component c) toDestroy.Add(c);
             }
 
@@ -243,7 +243,7 @@ namespace StrangeToolkit
             System.Type ppVolType = System.Type.GetType("UnityEngine.Rendering.PostProcessing.PostProcessVolume, Unity.Postprocessing.Runtime");
             if (ppVolType != null)
             {
-                var ppVols = Object.FindObjectsOfType(ppVolType) as Component[];
+                var ppVols = Object.FindObjectsByType(ppVolType, FindObjectsSortMode.None) as Component[];
                 if (ppVols != null) toDestroy.AddRange(ppVols);
             }
 

@@ -47,7 +47,7 @@ namespace StrangeToolkit
                     break;
             }
 
-            if (bakeryStorageType != null && FindObjectOfType(bakeryStorageType) != null)
+            if (bakeryStorageType != null && FindFirstObjectByType(bakeryStorageType) != null)
             {
                 preset.bakeType = BakeType.Bakery;
                 StrangeToolkitLogger.Log("Detected Bakery lightmaps.");
