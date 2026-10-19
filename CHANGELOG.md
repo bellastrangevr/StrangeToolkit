@@ -2,7 +2,17 @@
 
 ## [Unreleased]
 
+### Security
+- **In-editor video playback could run programs on your PC.** Video URLs were pasted straight into the yt-dlp command, so a URL from a scene, prefab or shared playlist could add options like `--exec`. URLs are now validated and passed after `--`, and yt-dlp only runs for https links
+- yt-dlp no longer skips TLS certificate checks
+
 ### Fixed
+- **Toggle persistence now actually persists.** States were only kept in memory and reset every visit. They are now saved per player with VRChat PlayerData, loaded after `OnPlayerRestored`
+- **Global cleanup no longer makes every player fight over every prop.** Only the player who pressed reset moves synced props; others reset only unsynced ones. Auto-respawn of synced props is master-only per prop, so unsynced props respawn for everyone
+- "Apply ASTC 6x6" asks before changing import settings (they can't be undone), batches the reimport and can be cancelled
+- Errors that were silently swallowed now log a warning (yt-dlp search, removing a toggle's backing UdonBehaviour)
+- AVPro defines are kept the same on PC, Android and iOS, so switching platform can't change what compiles
+- Video player prefabs are found by file name when a package is installed somewhere other than the expected path
 - **Atmosphere fog no longer stacks between presets.** Switching atmospheres now starts from the scene's own sky and fog every time. Before, anything a preset didn't set (fog left on, an old skybox) carried over from the previous preset
 - **Atmosphere Presets section in the World tab works again.** Since 2.0 it pointed at fields the Hub doesn't have, so it showed "None" and "+ Create New Preset" threw an error. It now edits the Hub's real presets again
 - New atmospheres start as a copy of the scene's current fog, so adding one doesn't change the look by itself
@@ -17,7 +27,15 @@
   - Fog coupling: warns when far clip cuts geometry before the fog hides it (hard edge), or when far clip renders well past full fog, with a one-click "Set Far Clip" fix
 - Warning on the default preset when its fog differs from the scene's Lighting settings, which is why the game and the editor looked different
 - View / Restore preview that always puts the scene's own sky and fog back
+- First EditMode tests (URL safety, atmosphere maths, video player registry), only compiled when tests are enabled
+- Architecture decision records in `Documentation~/adr/`
 - `STRANGE_DISABLE_AVPRO` scripting define: add it in Player Settings to switch off all AVPro-dependent code (in-editor video playback and the audio shim) if an AVPro or VRChat SDK version mismatch stops the toolkit from compiling
+
+### Changed
+- Atmosphere editing moved out of the dashboard window into its own module (`Editor/Atmosphere/`)
+- Video players are registered through one adapter interface, so adding a player no longer means editing the dashboard
+- `AtmospherePreset` assets are retired: nothing used them. Existing assets still load and say so; the Create menu entry is gone
+- Replaced deprecated Unity find APIs; the runtime assembly no longer references editor assemblies; GitHub Actions pinned to commit SHAs
 
 ## [2.1.0] - 2026-07-02
 
