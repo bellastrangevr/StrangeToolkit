@@ -173,7 +173,7 @@ namespace StrangeToolkit
             }
 
             // Show install hints for missing players
-            if (!StrangeProTV.IsInstalled && !StrangeIwaSync3.IsInstalled && !StrangeUSharpVideo.IsInstalled && !StrangeVizVid.IsInstalled && !StrangeYamaPlayer.IsInstalled && !StrangeVideoTXL.IsInstalled)
+            if (!VideoPlayerRegistry.AnyInstalled)
             {
                 EditorGUILayout.HelpBox("A third-party video player is strongly recommended over the built-in Unity player for better format support and performance.", MessageType.Warning);
                 EditorGUILayout.BeginHorizontal();
@@ -260,7 +260,7 @@ namespace StrangeToolkit
             bool strangeVideoOk = _s_strangeVideo != null && _s_strangeVideo.primaryVideoPlayer != null && _s_strangeVideo.strangeHub != null;
             
             string autoPlayerId = _s_proTvInScene ? "protv" : _s_iwaSync3InScene ? "iwasync3" : _s_uSharpVideoInScene ? "usharpvideo" : _s_vizVidInScene ? "vizvid" : _s_yamaPlayerInScene ? "yamaplayer" : _s_videoTXLInScene ? "videotxl" :
-                StrangeProTV.IsInstalled ? "protv" : StrangeIwaSync3.IsInstalled ? "iwasync3" : StrangeUSharpVideo.IsInstalled ? "usharpvideo" : StrangeVizVid.IsInstalled ? "vizvid" : StrangeYamaPlayer.IsInstalled ? "yamaplayer" : StrangeVideoTXL.IsInstalled ? "videotxl" : "unity";
+                VideoPlayerRegistry.FirstInstalled?.Id ?? "unity";
 
             EditorGUILayout.LabelField("Status", EditorStyles.boldLabel);
 
@@ -521,37 +521,16 @@ namespace StrangeToolkit
 
             GameObject playerGO = null;
 
-            switch (playerId)
+            var adapter = VideoPlayerRegistry.Find(playerId);
+            if (adapter != null)
             {
-                case "protv":
-                    playerGO = StrangeProTV.InstantiatePrefab();
-                    break;
-
-                case "iwasync3":
-                    playerGO = StrangeIwaSync3.InstantiatePrefab();
-                    break;
-
-                case "usharpvideo":
-                    playerGO = StrangeUSharpVideo.InstantiatePrefab();
-                    break;
-
-                case "vizvid":
-                    playerGO = StrangeVizVid.InstantiatePrefab();
-                    break;
-
-                case "yamaplayer":
-                    playerGO = StrangeYamaPlayer.InstantiatePrefab();
-                    break;
-
-                case "videotxl":
-                    playerGO = StrangeVideoTXL.InstantiatePrefab();
-                    break;
-
-                case "unity":
-                default:
-                    var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(UnityBuiltInPrefabPath);
-                    playerGO = prefab != null ? (GameObject)PrefabUtility.InstantiatePrefab(prefab) : null;
-                    break;
+                playerGO = adapter.InstantiatePrefab();
+            }
+            else
+            {
+                // "unity": VRChat's built-in Unity video player sample
+                var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(UnityBuiltInPrefabPath);
+                playerGO = prefab != null ? (GameObject)PrefabUtility.InstantiatePrefab(prefab) : null;
             }
 
             if (playerGO == null)
@@ -616,7 +595,7 @@ namespace StrangeToolkit
             Undo.RecordObject(strangeVideo, "Configure StrangeVideo");
             strangeVideo.primaryVideoPlayer = videoPlayer as BaseVRCVideoPlayer;
             strangeVideo.strangeHub = hub;
-            strangeVideo.useBuiltInSync = !StrangeProTV.IsInstalled && !StrangeIwaSync3.IsInstalled && !StrangeUSharpVideo.IsInstalled && !StrangeVizVid.IsInstalled && !StrangeYamaPlayer.IsInstalled && !StrangeVideoTXL.IsInstalled;
+            strangeVideo.useBuiltInSync = !VideoPlayerRegistry.AnyInstalled;
             EditorUtility.SetDirty(strangeVideo);
             _statusCacheDirty = true;
             StrangeToolkitLogger.LogSuccess("StrangeVideo wiring fixed.");

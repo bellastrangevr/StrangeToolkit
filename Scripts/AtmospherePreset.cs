@@ -18,10 +18,10 @@ public struct SerializableLightmapData
 }
 
 /// <summary>
-/// A ScriptableObject that defines a complete atmosphere preset, including
-/// skybox, fog, and baked lighting data.
+/// Retired: nothing in the toolkit reads these assets. Atmospheres live on StrangeHub because Udon can't use
+/// ScriptableObjects at runtime (see Documentation~/adr/0001-parallel-arrays-for-udon-data.md).
+/// Kept only so existing preset assets don't turn into missing-script assets; no longer creatable from the menu.
 /// </summary>
-[CreateAssetMenu(fileName = "New Atmosphere Preset", menuName = "Strange Toolkit/Atmosphere Preset")]
 public class AtmospherePreset : ScriptableObject
 {
     [Header("General")]

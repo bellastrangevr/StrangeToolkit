@@ -8,6 +8,8 @@ namespace StrangeToolkit
     {
         public override void OnInspectorGUI()
         {
+            EditorGUILayout.HelpBox("This asset type is no longer used by Strange Toolkit. Atmospheres are now edited in " +
+                "Dashboard > World > Atmosphere Presets and stored on the Strange Hub. You can safely delete this asset.", MessageType.Warning);
             DrawDefaultInspector();
 
             GUILayout.Space(15);
