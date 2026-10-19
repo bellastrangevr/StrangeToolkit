@@ -2,6 +2,7 @@ using UnityEngine;
 using UdonSharp;
 using VRC.SDKBase;
 using VRC.Udon;
+using VRC.SDK3.Components;
 
 [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
 public class StrangeCleanup : UdonSharpBehaviour
@@ -32,6 +33,8 @@ public class StrangeCleanup : UdonSharpBehaviour
     // Stored original transforms (parallel arrays for Udon)
     private Vector3[] _originalPositions;
     private Quaternion[] _originalRotations;
+    // Props with VRCObjectSync are moved only by their new owner; everyone else just receives the sync
+    private VRCObjectSync[] _objectSyncs;
     private bool _initialized = false;
 
     // Auto-respawn tracking (per object)
@@ -94,6 +97,7 @@ public class StrangeCleanup : UdonSharpBehaviour
         int count = cleanupProps.Length;
         _originalPositions = new Vector3[count];
         _originalRotations = new Quaternion[count];
+        _objectSyncs = new VRCObjectSync[count];
 
         for (int i = 0; i < count; i++)
         {
@@ -102,6 +106,7 @@ public class StrangeCleanup : UdonSharpBehaviour
             {
                 _originalPositions[i] = prop.transform.position;
                 _originalRotations[i] = prop.transform.rotation;
+                _objectSyncs[i] = (VRCObjectSync)prop.GetComponent(typeof(VRCObjectSync));
             }
         }
 
@@ -112,13 +117,9 @@ public class StrangeCleanup : UdonSharpBehaviour
     {
         if (!useAutoRespawn || !_initialized || _lastDroppedTimes == null) return;
 
-        // With Global Sync: only master handles auto-respawn (VRCObjectSync syncs position)
-        // Without Global Sync: each player runs their own timer (local reset only)
-        if (useGlobalSync && !Networking.IsMaster)
-        {
-            SendCustomEventDelayedSeconds(nameof(_CheckAutoRespawn), CHECK_INTERVAL);
-            return;
-        }
+        // Synced props (VRCObjectSync): only the master respawns them and the sync carries it to everyone.
+        // Unsynced props: every player respawns their own local copy.
+        bool isMaster = Networking.IsMaster;
 
         float currentTime = Time.time;
         float timeoutSeconds = autoRespawnMinutes * 60f;
@@ -127,6 +128,7 @@ public class StrangeCleanup : UdonSharpBehaviour
         {
             GameObject prop = cleanupProps[i];
             if (prop == null || i >= _lastDroppedTimes.Length) continue;
+            if (IsSynced(i) && !isMaster) continue;
 
             // Check if pickup is currently held (using cached reference)
             bool isHeld = false;
@@ -166,28 +168,43 @@ public class StrangeCleanup : UdonSharpBehaviour
     private void RespawnSingleProp(int index)
     {
         if (index < 0 || index >= cleanupProps.Length) return;
+        if (cleanupProps[index] == null || index >= _originalPositions.Length) return;
 
+        MoveProp(index);
+
+        // Reset drop time after respawn
+        if (_lastDroppedTimes != null && index < _lastDroppedTimes.Length)
+        {
+            _lastDroppedTimes[index] = Time.time;
+        }
+    }
+
+    private bool IsSynced(int index)
+    {
+        return _objectSyncs != null && index < _objectSyncs.Length && _objectSyncs[index] != null;
+    }
+
+    // Returns a prop to its start. For synced props the caller must be the one player doing the reset:
+    // it takes ownership and VRCObjectSync sends the move to everyone.
+    private void MoveProp(int index)
+    {
         GameObject prop = cleanupProps[index];
-        if (prop == null || index >= _originalPositions.Length) return;
+        bool synced = IsSynced(index);
 
-        // Take ownership if needed
-        if (!Networking.IsOwner(prop))
+        if (synced && !Networking.IsOwner(prop))
         {
             Networking.SetOwner(Networking.LocalPlayer, prop);
         }
 
-        // Check if VRCPickup exists and drop it first
         var pickup = (VRC_Pickup)prop.GetComponent(typeof(VRC_Pickup));
         if (pickup != null)
         {
             pickup.Drop();
         }
 
-        // Reset transform
         prop.transform.position = _originalPositions[index];
         prop.transform.rotation = _originalRotations[index];
 
-        // Reset Rigidbody velocity if present
         var rb = prop.GetComponent<Rigidbody>();
         if (rb != null)
         {
@@ -195,11 +212,8 @@ public class StrangeCleanup : UdonSharpBehaviour
             rb.angularVelocity = Vector3.zero;
         }
 
-        // Reset drop time after respawn
-        if (_lastDroppedTimes != null && index < _lastDroppedTimes.Length)
-        {
-            _lastDroppedTimes[index] = Time.time;
-        }
+        // Teleport without smoothing for everyone else
+        if (synced) _objectSyncs[index].FlagDiscontinuity();
     }
 
     public override void OnDeserialization()
@@ -218,7 +232,7 @@ public class StrangeCleanup : UdonSharpBehaviour
         if (_syncedResetCount != _localResetCount)
         {
             _localResetCount = _syncedResetCount;
-            ApplyReset();
+            ApplyReset(false);
         }
     }
 
@@ -251,51 +265,34 @@ public class StrangeCleanup : UdonSharpBehaviour
             _syncedResetCount++;
             _localResetCount = _syncedResetCount;
             RequestSerialization();
-            ApplyReset();
+            ApplyReset(true);
         }
         else
         {
-            // Local-only reset
-            ApplyReset();
+            // Local-only reset: this player moves everything, including synced props
+            ApplyReset(true);
         }
     }
 
-    private void ApplyReset()
+    // isInitiator: true for the player who pressed reset. Everyone else only moves unsynced props;
+    // synced props are moved once by the initiator and arrive through VRCObjectSync, so players
+    // don't all fight over ownership of the same objects.
+    private void ApplyReset(bool isInitiator)
     {
         if (!_initialized || cleanupProps == null) return;
 
         int resetCount = 0;
         for (int i = 0; i < cleanupProps.Length; i++)
         {
-            GameObject prop = cleanupProps[i];
-            if (prop != null && i < _originalPositions.Length)
-            {
-                // Check if VRCPickup exists and drop it first
-                var pickup = (VRC_Pickup)prop.GetComponent(typeof(VRC_Pickup));
-                if (pickup != null)
-                {
-                    Networking.SetOwner(Networking.LocalPlayer, prop);
-                    pickup.Drop();
-                }
+            if (cleanupProps[i] == null || i >= _originalPositions.Length) continue;
+            if (IsSynced(i) && !isInitiator) continue;
 
-                // Reset transform
-                prop.transform.position = _originalPositions[i];
-                prop.transform.rotation = _originalRotations[i];
-
-                // Reset Rigidbody velocity if present
-                var rb = prop.GetComponent<Rigidbody>();
-                if (rb != null)
-                {
-                    rb.velocity = Vector3.zero;
-                    rb.angularVelocity = Vector3.zero;
-                }
-
-                resetCount++;
-            }
+            MoveProp(i);
+            resetCount++;
         }
 
         // Play sound
-        if (soundSource != null && resetSound != null && resetCount > 0)
+        if (soundSource != null && resetSound != null && (resetCount > 0 || !isInitiator))
         {
             soundSource.PlayOneShot(resetSound);
         }
