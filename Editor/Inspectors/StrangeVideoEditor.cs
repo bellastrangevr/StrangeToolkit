@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEditor;
 using StrangeToolkit;
 using System.Collections.Generic;
+using System.Linq;
 using VRC.SDK3.Video.Components;
 using VRC.SDK3.Video.Components.Base;
 
@@ -1234,6 +1235,17 @@ public class StrangeVideoEditor : Editor
             var modeProp = _yamaAutoPlaySO.FindProperty("_autoPlayMode");
             int mode = modeProp != null ? modeProp.enumValueIndex : 0;
 
+            if (mode != 0)
+            {
+                // From YamaPlayer's AutoPlay.cs: it runs once at load for the instance master only (or everyone in
+                // Local mode), and only checks whether that player is already playing, not what the synced video is.
+                EditorGUILayout.HelpBox("YamaPlayer's Auto-Play runs once when the world loads, only for the instance master, and only checks " +
+                    "whether the master is already playing. It doesn't check which video is currently shared. If someone has picked another " +
+                    "video from a playlist, the master can end up on the auto-play video while the shared video is the other one, and players " +
+                    "can switch to it when the next sync arrives (for example when someone joins). If videos swap unexpectedly, try Auto-Play Off.",
+                    MessageType.Info);
+            }
+
             if (mode == 1) // FromTrack
             {
                 GUILayout.Space(3);
@@ -2027,7 +2039,18 @@ public class StrangeVideoEditor : Editor
             EditorGUILayout.HelpBox($"{string.Join(", ", names)} handles video sync automatically. These settings are for the Unity built-in player only.", MessageType.Info);
         }
 
-        EditorGUILayout.PropertyField(_useBuiltInSync, new GUIContent("Enable Built-in Sync", "Enable StrangeVideo's own sync system. Disable when using ProTV."));
+        EditorGUILayout.PropertyField(_useBuiltInSync, new GUIContent("Enable Built-in Sync", "Only for VRChat's built-in Unity video player. Third-party players (ProTV, YamaPlayer, VideoTXL, ...) sync themselves."));
+        if (_useBuiltInSync.boolValue)
+        {
+            var playerInScene = VideoPlayerRegistry.All.FirstOrDefault(a => a.IsInstalled && a.FindInScene() != null);
+            if (playerInScene != null)
+            {
+                EditorGUILayout.HelpBox($"{playerInScene.DisplayName} syncs its own playback. With built-in sync also on, StrangeVideo seeks the video " +
+                    $"behind {playerInScene.DisplayName}'s back and the two fight, so the video can jump.", MessageType.Warning);
+                if (GUILayout.Button("Turn Off Built-in Sync"))
+                    _useBuiltInSync.boolValue = false;
+            }
+        }
         EditorGUILayout.PropertyField(_clientSyncThreshold, new GUIContent("Client Threshold", "Time difference (seconds) before a client corrects its playback position."));
         EditorGUILayout.PropertyField(_masterSyncThreshold, new GUIContent("Master Threshold", "Time difference (seconds) before the master broadcasts a new timestamp."));
         EditorGUILayout.PropertyField(_syncCheckInterval, new GUIContent("Check Interval", "How often (seconds) the master checks video sync."));

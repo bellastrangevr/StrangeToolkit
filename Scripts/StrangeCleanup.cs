@@ -236,17 +236,6 @@ public class StrangeCleanup : UdonSharpBehaviour
         }
     }
 
-    public override void OnPlayerJoined(VRCPlayerApi player)
-    {
-        if (!useGlobalSync) return;
-
-        // If we're the owner, resend state for late joiners
-        if (!player.isLocal && Networking.IsOwner(gameObject))
-        {
-            RequestSerialization();
-        }
-    }
-
     public override void Interact()
     {
         ResetAllProps();

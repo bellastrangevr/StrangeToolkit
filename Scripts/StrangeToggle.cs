@@ -72,16 +72,12 @@ public class StrangeToggle : UdonSharpBehaviour
     {
         if (!useGlobalSync) return;
 
-        // If local player joining, apply current state
+        // If local player joining, apply current state.
+        // No resend needed for others: VRChat sends late joiners the latest synced state automatically.
         if (player.isLocal)
         {
             _isOn = _syncedState;
             UpdateVisuals();
-        }
-        // If we're the owner, resend state for late joiners
-        else if (Networking.IsOwner(gameObject))
-        {
-            RequestSerialization();
         }
     }
 

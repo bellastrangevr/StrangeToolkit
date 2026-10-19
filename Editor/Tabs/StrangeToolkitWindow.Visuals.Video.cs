@@ -595,7 +595,8 @@ namespace StrangeToolkit
             Undo.RecordObject(strangeVideo, "Configure StrangeVideo");
             strangeVideo.primaryVideoPlayer = videoPlayer as BaseVRCVideoPlayer;
             strangeVideo.strangeHub = hub;
-            strangeVideo.useBuiltInSync = !VideoPlayerRegistry.AnyInstalled;
+            // Built-in sync is only for the Unity player; third-party players in the scene sync themselves
+            strangeVideo.useBuiltInSync = !VideoPlayerRegistry.All.Any(a => a.IsInstalled && a.FindInScene() != null);
             EditorUtility.SetDirty(strangeVideo);
             _statusCacheDirty = true;
             StrangeToolkitLogger.LogSuccess("StrangeVideo wiring fixed.");

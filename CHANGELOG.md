@@ -13,6 +13,9 @@
 - Errors that were silently swallowed now log a warning (yt-dlp search, removing a toggle's backing UdonBehaviour)
 - AVPro defines are kept the same on PC, Android and iOS, so switching platform can't change what compiles
 - Video player prefabs are found by file name when a package is installed somewhere other than the expected path
+- StrangeVideo warns when "Built-in Sync" is on while a third-party player (ProTV, YamaPlayer, VideoTXL, ...) is in the scene, since both syncing makes the video jump; one click turns it off. The dashboard's wiring fix now decides this from the players actually in the scene, not just installed
+- YamaPlayer Auto-Play shows how it really behaves (runs once for the instance master and doesn't check the shared video), which can make a different playlist video take over when someone joins
+- StrangeToggle and StrangeCleanup no longer resend their state every time someone joins; VRChat already sends late joiners the latest state
 - **Atmosphere fog no longer stacks between presets.** Switching atmospheres now starts from the scene's own sky and fog every time. Before, anything a preset didn't set (fog left on, an old skybox) carried over from the previous preset
 - **Atmosphere Presets section in the World tab works again.** Since 2.0 it pointed at fields the Hub doesn't have, so it showed "None" and "+ Create New Preset" threw an error. It now edits the Hub's real presets again
 - New atmospheres start as a copy of the scene's current fog, so adding one doesn't change the look by itself
