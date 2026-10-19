@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- **Atmosphere fog no longer stacks between presets.** Switching atmospheres now starts from the scene's own sky and fog every time. Before, anything a preset didn't set (fog left on, an old skybox) carried over from the previous preset
+- **Atmosphere Presets section in the World tab works again.** Since 2.0 it pointed at fields the Hub doesn't have, so it showed "None" and "+ Create New Preset" threw an error. It now edits the Hub's real presets again
+- New atmospheres start as a copy of the scene's current fog, so adding one doesn't change the look by itself
+
+### Added
+- Atmosphere presets can set fog mode (including Linear / distance fog with start and end), or keep the scene's mode
+- "Copy From Scene Fog" button per preset
+- Warning on the default preset when its fog differs from the scene's Lighting settings, which is why the game and the editor looked different
+- View / Restore preview that always puts the scene's own sky and fog back
+- `STRANGE_DISABLE_AVPRO` scripting define: add it in Player Settings to switch off all AVPro-dependent code (in-editor video playback and the audio shim) if an AVPro or VRChat SDK version mismatch stops the toolkit from compiling
+
 ## [2.1.0] - 2026-07-02
 
 ### Added

@@ -10,7 +10,7 @@ using UnityEditor;
 using UnityEngine;
 using VRC.SDK3.Components.Video;
 using VRC.SDK3.Video.Components;
-#if AVPRO_IMPORTED
+#if AVPRO_IMPORTED && !STRANGE_DISABLE_AVPRO
 using VRC.SDK3.Video.Components.AVPro;
 #endif
 using VRC.SDK3.Video.Components.Base;
@@ -146,7 +146,7 @@ namespace StrangeToolkit
         {
             BaseVRCVideoPlayer.InitializeBase = PrepareAutoplay;
             VRCUnityVideoPlayer.StartResolveURLCoroutine = ResolveURLCallback;
-#if AVPRO_IMPORTED
+#if AVPRO_IMPORTED && !STRANGE_DISABLE_AVPRO
             StrangeAVProPlayer.StartResolveURLCoroutine = ResolveURLCallback;
 #endif
             EditorApplication.playModeStateChanged -= PlayModeChanged;
@@ -165,7 +165,7 @@ namespace StrangeToolkit
                 var autoplayInfo = typeof(VRCUnityVideoPlayer).GetField("autoPlay", BindingFlags.Instance | BindingFlags.NonPublic);
                 if (autoplayInfo != null) autoplay = (bool)autoplayInfo.GetValue(unity);
             }
-#if AVPRO_IMPORTED
+#if AVPRO_IMPORTED && !STRANGE_DISABLE_AVPRO
             else if (player is VRCAVProVideoPlayer avpro)
             {
                 url = avpro.VideoURL;

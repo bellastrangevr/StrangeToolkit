@@ -5,14 +5,14 @@ using UnityEngine.SceneManagement;
 using System.Collections.Generic;
 using System.Linq;
 
-#if AVPRO_IMPORTED
+#if AVPRO_IMPORTED && !STRANGE_DISABLE_AVPRO
 using VRC.SDK3.Video.Components.AVPro;
 using RenderHeads.Media.AVProVideo;
 #endif
 
 namespace StrangeToolkit
 {
-#if AVPRO_IMPORTED
+#if AVPRO_IMPORTED && !STRANGE_DISABLE_AVPRO
     /// <summary>
     /// Swaps AudioOutput components to StrangeAudioOutputShim on play mode entry
     /// for corrected per-AudioSource volume control.

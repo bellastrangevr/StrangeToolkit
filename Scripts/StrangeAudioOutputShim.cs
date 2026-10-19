@@ -1,5 +1,5 @@
 
-#if AVPRO_IMPORTED
+#if AVPRO_IMPORTED && !STRANGE_DISABLE_AVPRO
 using RenderHeads.Media.AVProVideo;
 #endif
 using System.Reflection;
@@ -10,13 +10,13 @@ using UnityEngine;
 /// </summary>
 [AddComponentMenu("")]
 public class StrangeAudioOutputShim :
-#if AVPRO_IMPORTED
+#if AVPRO_IMPORTED && !STRANGE_DISABLE_AVPRO
     AudioOutput
 #else
     MonoBehaviour
 #endif
 {
-#if AVPRO_IMPORTED
+#if AVPRO_IMPORTED && !STRANGE_DISABLE_AVPRO
     private float _volume;
     private bool _positionalAudio;
     private FieldInfo _spaInfo;

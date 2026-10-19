@@ -106,125 +106,298 @@ namespace StrangeToolkit
             EditorGUILayout.EndVertical();
         }
 
-                        private void DrawAtmospheresSection(StrangeHub hub)
+        private VisualsSnapshot _atmoPreviewSnapshot;
+        private int _atmoPreviewIndex = -1;
 
+        private static readonly string[] _fogModeLabels = { "Scene", "Linear (distance)", "Exponential", "Exponential Squared" };
+
+        private void DrawAtmospheresSection(StrangeHub hub)
+        {
+            SerializedObject so = new SerializedObject(hub);
+            so.Update();
+            var pNames = so.FindProperty("atmoNames");
+            var pDefaults = so.FindProperty("atmoIsDefault");
+            var pSkies = so.FindProperty("atmoSkyboxes");
+            var pControlFog = so.FindProperty("atmoControlFog");
+            var pFogColors = so.FindProperty("atmoFogColors");
+            var pFogDens = so.FindProperty("atmoFogDensities");
+            var pFogModes = so.FindProperty("atmoFogModes");
+            var pFogStarts = so.FindProperty("atmoFogStarts");
+            var pFogEnds = so.FindProperty("atmoFogEnds");
+            var pRoots = so.FindProperty("atmoRoots");
+
+            int count = pNames.arraySize;
+            SyncAtmosphereArrays(so, count);
+
+            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
+
+            EditorGUILayout.BeginHorizontal();
+            _showAtmospheres = EditorGUILayout.Foldout(_showAtmospheres, "Atmosphere Presets", true, _foldoutStyle);
+            GUILayout.FlexibleSpace();
+            GUI.color = count > 0 ? new Color(0.4f, 0.8f, 0.4f) : new Color(0.6f, 0.6f, 0.6f);
+            GUILayout.Label(count > 0 ? $"{count} preset(s)" : "None", EditorStyles.miniLabel);
+            GUI.color = Color.white;
+            EditorGUILayout.EndHorizontal();
+
+            if (_showAtmospheres)
+            {
+                GUILayout.Space(3);
+
+                if (_atmoPreviewSnapshot != null)
+                {
+                    EditorGUILayout.BeginHorizontal();
+                    EditorGUILayout.HelpBox("Previewing an atmosphere. The scene's own sky and fog are restored when you press Restore.", MessageType.Info);
+                    if (GUILayout.Button("Restore", GUILayout.Width(70), GUILayout.Height(38))) RestoreAtmospherePreview(hub);
+                    EditorGUILayout.EndHorizontal();
+                }
+
+                for (int i = 0; i < count; i++)
+                {
+                    EditorGUILayout.BeginVertical(_listItemStyle);
+
+                    EditorGUILayout.BeginHorizontal();
+                    bool isDefault = pDefaults.GetArrayElementAtIndex(i).boolValue;
+                    GUI.color = new Color(0.4f, 0.8f, 0.4f);
+                    GUILayout.Label(isDefault ? "★" : "", GUILayout.Width(15));
+                    GUI.color = Color.white;
+
+                    var nameProp = pNames.GetArrayElementAtIndex(i);
+                    nameProp.stringValue = EditorGUILayout.TextField(nameProp.stringValue);
+
+                    GUI.enabled = !Application.isPlaying;
+                    if (GUILayout.Button(_atmoPreviewIndex == i ? "Viewing" : "View", EditorStyles.miniButton, GUILayout.Width(55)))
+                    {
+                        so.ApplyModifiedProperties();
+                        PreviewAtmosphere(hub, i);
+                    }
+                    GUI.enabled = true;
+
+                    if (GUILayout.Button("X", EditorStyles.miniButton, GUILayout.Width(22)))
+                    {
+                        if (_atmoPreviewSnapshot != null) RestoreAtmospherePreview(hub);
+                        RemoveAtmosphere(so, i);
+                        break;
+                    }
+                    EditorGUILayout.EndHorizontal();
+
+                    EditorGUI.indentLevel++;
+
+                    bool newDef = EditorGUILayout.ToggleLeft("Default (applied when the world loads)", isDefault);
+                    if (newDef != isDefault)
+                    {
+                        for (int j = 0; j < count; j++) pDefaults.GetArrayElementAtIndex(j).boolValue = false;
+                        pDefaults.GetArrayElementAtIndex(i).boolValue = newDef;
+                    }
+
+                    EditorGUILayout.PropertyField(pSkies.GetArrayElementAtIndex(i), new GUIContent("Skybox", "Leave empty to keep the scene's skybox"));
+
+                    var fogProp = pControlFog.GetArrayElementAtIndex(i);
+                    fogProp.boolValue = EditorGUILayout.ToggleLeft(new GUIContent("Control Fog", "Off: this preset keeps the scene's own fog (Lighting window)"), fogProp.boolValue);
+                    if (fogProp.boolValue)
+                    {
+                        EditorGUI.indentLevel++;
+                        var modeProp = pFogModes.GetArrayElementAtIndex(i);
+                        modeProp.intValue = Mathf.Clamp(EditorGUILayout.Popup("Mode", modeProp.intValue, _fogModeLabels), 0, 3);
+                        EditorGUILayout.PropertyField(pFogColors.GetArrayElementAtIndex(i), new GUIContent("Color"));
+
+                        FogMode effectiveMode = modeProp.intValue > 0 ? (FogMode)modeProp.intValue : RenderSettings.fogMode;
+                        if (effectiveMode == FogMode.Linear)
                         {
-
-                            SerializedObject so = new SerializedObject(hub);
-
-                            var presetsProperty = so.FindProperty("atmospherePresets");
-
-                            var sceneVolumeProperty = so.FindProperty("sceneVolume");
-
-                
-
-                            EditorGUILayout.BeginVertical(EditorStyles.helpBox);
-
-                
-
-                            EditorGUILayout.BeginHorizontal();
-
-                            _showAtmospheres = EditorGUILayout.Foldout(_showAtmospheres, "Atmosphere Presets", true, _foldoutStyle);
-
-                            GUILayout.FlexibleSpace();
-
-                
-
-                            if (presetsProperty != null && presetsProperty.arraySize > 0)
-
-                            {
-
-                                GUI.color = new Color(0.4f, 0.8f, 0.4f);
-
-                                GUILayout.Label($"{presetsProperty.arraySize} preset(s)", EditorStyles.miniLabel);
-
-                                GUI.color = Color.white;
-
-                            }
-
-                            else
-
-                            {
-
-                                GUI.color = new Color(0.6f, 0.6f, 0.6f);
-
-                                GUILayout.Label("None", EditorStyles.miniLabel);
-
-                                GUI.color = Color.white;
-
-                            }
-
-                            EditorGUILayout.EndHorizontal();
-
-                
-
-                            if (_showAtmospheres)
-
-                            {
-
-                                GUILayout.Space(3);
-
-                                
-
-                                EditorGUILayout.HelpBox("Assign a scene Volume component to enable Post Processing swaps.", MessageType.Info);
-
-                                if (sceneVolumeProperty != null)
-
-                                {
-
-                                    EditorGUILayout.PropertyField(sceneVolumeProperty, new GUIContent("Scene Post-Process Volume"));
-
-                                }
-
-                                
-
-                                GUILayout.Space(5);
-
-                
-
-                                if (presetsProperty != null)
-
-                                {
-
-                                    EditorGUILayout.PropertyField(presetsProperty, new GUIContent("Atmosphere Presets"), true);
-
-                                }
-
-                                
-
-                                GUILayout.Space(5);
-
-                                EditorGUILayout.BeginHorizontal();
-
-                                if (GUILayout.Button("+ Create New Preset", EditorStyles.miniButton))
-
-                                {
-
-                                    CreateAtmospherePreset(so);
-
-                                }
-
-                                if (GUILayout.Button("Create Switch", EditorStyles.miniButton))
-
-                                {
-
-                                    CreateAtmosphereSwitch(hub);
-
-                                }
-
-                                EditorGUILayout.EndHorizontal();
-
-                            }
-
-                
-
-                            so.ApplyModifiedProperties();
-
-                            EditorGUILayout.EndVertical();
-
+                            EditorGUILayout.PropertyField(pFogStarts.GetArrayElementAtIndex(i), new GUIContent("Start"));
+                            EditorGUILayout.PropertyField(pFogEnds.GetArrayElementAtIndex(i), new GUIContent("End"));
+                        }
+                        else
+                        {
+                            EditorGUILayout.PropertyField(pFogDens.GetArrayElementAtIndex(i), new GUIContent("Density"));
                         }
 
-        
+                        if (GUILayout.Button("Copy From Scene Fog", EditorStyles.miniButton))
+                            CopySceneFogToAtmosphere(so, i);
+                        EditorGUI.indentLevel--;
+                    }
+
+                    EditorGUILayout.PropertyField(pRoots.GetArrayElementAtIndex(i), new GUIContent("Root Object"));
+
+                    EditorGUI.indentLevel--;
+
+                    if (isDefault && _atmoPreviewSnapshot == null && !Application.isPlaying)
+                    {
+                        string mismatch = DescribeDefaultAtmosphereMismatch(so, i);
+                        if (mismatch != null)
+                        {
+                            EditorGUILayout.HelpBox("In-game this preset will look different from the editor: " + mismatch +
+                                " Use 'Copy From Scene Fog' to match the editor, or 'View' to see the in-game look.", MessageType.Warning);
+                        }
+                    }
+
+                    EditorGUILayout.EndVertical();
+                    GUILayout.Space(3);
+                }
+
+                GUILayout.Space(5);
+                EditorGUILayout.BeginHorizontal();
+                if (GUILayout.Button("+ New Atmosphere", EditorStyles.miniButton)) AddAtmosphere(so);
+                if (GUILayout.Button("Create Switch", EditorStyles.miniButton)) CreateAtmosphereSwitch(hub);
+                EditorGUILayout.EndHorizontal();
+            }
+
+            so.ApplyModifiedProperties();
+            EditorGUILayout.EndVertical();
+        }
+
+        private void PreviewAtmosphere(StrangeHub hub, int index)
+        {
+            if (_atmoPreviewSnapshot == null)
+            {
+                _atmoPreviewSnapshot = new VisualsSnapshot
+                {
+                    skybox = RenderSettings.skybox,
+                    fog = RenderSettings.fog,
+                    fogMode = RenderSettings.fogMode,
+                    fogColor = RenderSettings.fogColor,
+                    fogDensity = RenderSettings.fogDensity,
+                    fogStartDistance = RenderSettings.fogStartDistance,
+                    fogEndDistance = RenderSettings.fogEndDistance
+                };
+                if (hub.atmoRoots != null)
+                {
+                    foreach (var root in hub.atmoRoots)
+                        if (root != null) _atmoPreviewSnapshot.rootStates[root] = root.activeSelf;
+                }
+            }
+            else
+            {
+                // Put the scene back first so the hub reads the real scene values as its baseline
+                ApplySnapshot(_atmoPreviewSnapshot);
+            }
+
+            hub.ResetBaseline();
+            hub.ApplyAtmosphere(index);
+            _atmoPreviewIndex = index;
+            SceneView.RepaintAll();
+        }
+
+        private void RestoreAtmospherePreview(StrangeHub hub)
+        {
+            if (_atmoPreviewSnapshot == null) return;
+            ApplySnapshot(_atmoPreviewSnapshot);
+            _atmoPreviewSnapshot = null;
+            _atmoPreviewIndex = -1;
+            if (hub != null) hub.ResetBaseline();
+            SceneView.RepaintAll();
+            StrangeToolkitLogger.Log("Scene sky and fog restored.");
+        }
+
+        private static void ApplySnapshot(VisualsSnapshot snapshot)
+        {
+            RenderSettings.skybox = snapshot.skybox;
+            RenderSettings.fog = snapshot.fog;
+            RenderSettings.fogMode = snapshot.fogMode;
+            RenderSettings.fogColor = snapshot.fogColor;
+            RenderSettings.fogDensity = snapshot.fogDensity;
+            RenderSettings.fogStartDistance = snapshot.fogStartDistance;
+            RenderSettings.fogEndDistance = snapshot.fogEndDistance;
+            foreach (var kvp in snapshot.rootStates)
+                if (kvp.Key != null) kvp.Key.SetActive(kvp.Value);
+        }
+
+        private void CopySceneFogToAtmosphere(SerializedObject so, int index)
+        {
+            // While previewing, RenderSettings holds the preview, so read the real scene values from the snapshot
+            var src = _atmoPreviewSnapshot;
+            so.FindProperty("atmoFogModes").GetArrayElementAtIndex(index).intValue = (int)(src != null ? src.fogMode : RenderSettings.fogMode);
+            so.FindProperty("atmoFogColors").GetArrayElementAtIndex(index).colorValue = src != null ? src.fogColor : RenderSettings.fogColor;
+            so.FindProperty("atmoFogDensities").GetArrayElementAtIndex(index).floatValue = src != null ? src.fogDensity : RenderSettings.fogDensity;
+            so.FindProperty("atmoFogStarts").GetArrayElementAtIndex(index).floatValue = src != null ? src.fogStartDistance : RenderSettings.fogStartDistance;
+            so.FindProperty("atmoFogEnds").GetArrayElementAtIndex(index).floatValue = src != null ? src.fogEndDistance : RenderSettings.fogEndDistance;
+            StrangeToolkitLogger.Log("Copied the scene's fog settings into the atmosphere preset.");
+        }
+
+        // Returns a short description of how the default preset differs from the scene's own fog, or null if it matches
+        private static string DescribeDefaultAtmosphereMismatch(SerializedObject so, int index)
+        {
+            if (!so.FindProperty("atmoControlFog").GetArrayElementAtIndex(index).boolValue) return null;
+
+            var diffs = new List<string>();
+            int mode = so.FindProperty("atmoFogModes").GetArrayElementAtIndex(index).intValue;
+            FogMode effectiveMode = mode > 0 ? (FogMode)mode : RenderSettings.fogMode;
+
+            if (!RenderSettings.fog) diffs.Add("scene fog is off but this preset turns fog on");
+            if (effectiveMode != RenderSettings.fogMode) diffs.Add($"fog mode {effectiveMode} vs scene {RenderSettings.fogMode}");
+
+            Color c = so.FindProperty("atmoFogColors").GetArrayElementAtIndex(index).colorValue;
+            Color sc = RenderSettings.fogColor;
+            if (Mathf.Abs(c.r - sc.r) + Mathf.Abs(c.g - sc.g) + Mathf.Abs(c.b - sc.b) > 0.01f) diffs.Add("fog color");
+
+            if (effectiveMode == FogMode.Linear)
+            {
+                float start = so.FindProperty("atmoFogStarts").GetArrayElementAtIndex(index).floatValue;
+                float end = so.FindProperty("atmoFogEnds").GetArrayElementAtIndex(index).floatValue;
+                if (end > start && (!Mathf.Approximately(start, RenderSettings.fogStartDistance) || !Mathf.Approximately(end, RenderSettings.fogEndDistance)))
+                    diffs.Add($"fog distance {start:0.#}-{end:0.#} vs scene {RenderSettings.fogStartDistance:0.#}-{RenderSettings.fogEndDistance:0.#}");
+            }
+            else
+            {
+                float density = so.FindProperty("atmoFogDensities").GetArrayElementAtIndex(index).floatValue;
+                if (Mathf.Abs(density - RenderSettings.fogDensity) > 0.0001f)
+                    diffs.Add($"fog density {density:0.####} vs scene {RenderSettings.fogDensity:0.####}");
+            }
+
+            return diffs.Count == 0 ? null : string.Join(", ", diffs) + ".";
+        }
+
+        private void AddAtmosphere(SerializedObject so)
+        {
+            int newIdx = so.FindProperty("atmoNames").arraySize;
+            SyncAtmosphereArrays(so, newIdx + 1);
+
+            // New presets start as a copy of the scene, so adding one never changes the look by itself
+            so.FindProperty("atmoNames").GetArrayElementAtIndex(newIdx).stringValue = "New Atmosphere";
+            so.FindProperty("atmoIsDefault").GetArrayElementAtIndex(newIdx).boolValue = false;
+            so.FindProperty("atmoSkyboxes").GetArrayElementAtIndex(newIdx).objectReferenceValue = null;
+            so.FindProperty("atmoRoots").GetArrayElementAtIndex(newIdx).objectReferenceValue = null;
+            so.FindProperty("atmoControlFog").GetArrayElementAtIndex(newIdx).boolValue = RenderSettings.fog;
+            CopySceneFogToAtmosphere(so, newIdx);
+            StrangeToolkitLogger.LogSuccess($"Created new atmosphere preset (Preset {newIdx + 1})");
+        }
+
+        private void RemoveAtmosphere(SerializedObject so, int index)
+        {
+            string removedName = so.FindProperty("atmoNames").GetArrayElementAtIndex(index).stringValue;
+            foreach (string name in _atmoArrayNames)
+            {
+                var prop = so.FindProperty(name);
+                if (index < prop.arraySize) prop.DeleteArrayElementAtIndex(index);
+            }
+            StrangeToolkitLogger.Log($"Removed atmosphere preset: '{removedName}'");
+        }
+
+        private static readonly string[] _atmoArrayNames =
+        {
+            "atmoNames", "atmoIsDefault", "atmoSkyboxes", "atmoControlFog", "atmoFogColors",
+            "atmoFogDensities", "atmoFogModes", "atmoFogStarts", "atmoFogEnds", "atmoRoots"
+        };
+
+        // Keeps every parallel array the same length. Older hubs have no fog mode/distance arrays yet;
+        // those entries are filled with 0 ("keep scene mode") and the scene's distances so existing presets behave as before.
+        private static void SyncAtmosphereArrays(SerializedObject so, int targetCount)
+        {
+            foreach (string name in _atmoArrayNames)
+            {
+                var prop = so.FindProperty(name);
+                if (prop.arraySize == targetCount) continue;
+
+                int oldSize = prop.arraySize;
+                prop.arraySize = targetCount;
+                for (int i = oldSize; i < targetCount; i++)
+                {
+                    if (name == "atmoFogStarts") prop.GetArrayElementAtIndex(i).floatValue = RenderSettings.fogStartDistance;
+                    else if (name == "atmoFogEnds") prop.GetArrayElementAtIndex(i).floatValue = RenderSettings.fogEndDistance;
+                    else if (name == "atmoFogModes") prop.GetArrayElementAtIndex(i).intValue = 0;
+                }
+            }
+        }
+
 
                 private void DrawCleanupSection(StrangeHub hub)
 
@@ -721,72 +894,6 @@ namespace StrangeToolkit
         
 
                     EditorGUILayout.EndVertical();
-
-                }
-
-        
-
-                private void CreateAtmospherePreset(SerializedObject hubSO)
-
-                {
-
-                    string dirPath = "Assets/StrangeToolkit/Lighting Presets";
-
-                    if (!AssetDatabase.IsValidFolder(dirPath))
-
-                    {
-
-                        AssetDatabase.CreateFolder("Assets/StrangeToolkit", "Lighting Presets");
-
-                    }
-
-                    
-
-                    string path = EditorUtility.SaveFilePanelInProject(
-
-                        "Save Atmosphere Preset",
-
-                        "New Atmosphere Preset.asset",
-
-                        "asset",
-
-                        "Please enter a file name to save the preset to.",
-
-                        dirPath
-
-                    );
-
-        
-
-                    if (string.IsNullOrEmpty(path)) return;
-
-        
-
-                    AtmospherePreset preset = ScriptableObject.CreateInstance<AtmospherePreset>();
-
-                    AssetDatabase.CreateAsset(preset, path);
-
-                    AssetDatabase.SaveAssets();
-
-                    
-
-                    StrangeToolkitLogger.LogSuccess($"Created new atmosphere preset at {path}");
-
-        
-
-                    // Add the new preset to the hub's array
-
-                    var presetsProp = hubSO.FindProperty("atmospherePresets");
-
-                    presetsProp.arraySize++;
-
-                    presetsProp.GetArrayElementAtIndex(presetsProp.arraySize - 1).objectReferenceValue = preset;
-
-                    hubSO.ApplyModifiedProperties();
-
-                    
-
-                    Selection.activeObject = preset;
 
                 }
 

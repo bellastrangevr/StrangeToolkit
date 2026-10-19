@@ -17,6 +17,10 @@ public class StrangeHub : UdonSharpBehaviour
     public bool[] atmoControlFog;
     public Color[] atmoFogColors;
     public float[] atmoFogDensities;
+    // FogMode as int (1 Linear, 2 Exponential, 3 ExponentialSquared); 0 or missing keeps the scene's mode
+    public int[] atmoFogModes;
+    public float[] atmoFogStarts;
+    public float[] atmoFogEnds;
     
     public GameObject[] atmoRoots;
 
@@ -76,8 +80,39 @@ public class StrangeHub : UdonSharpBehaviour
 
     private int _currentIndex = 0;
 
+    // The scene's own RenderSettings, captured before any atmosphere is applied.
+    // Every atmosphere is applied on top of this baseline, so values never carry over between presets.
+    private bool _baselineCaptured;
+    private Material _baseSkybox;
+    private bool _baseFog;
+    private FogMode _baseFogMode;
+    private Color _baseFogColor;
+    private float _baseFogDensity;
+    private float _baseFogStart;
+    private float _baseFogEnd;
+
+    private void CaptureBaseline()
+    {
+        _baseSkybox = RenderSettings.skybox;
+        _baseFog = RenderSettings.fog;
+        _baseFogMode = RenderSettings.fogMode;
+        _baseFogColor = RenderSettings.fogColor;
+        _baseFogDensity = RenderSettings.fogDensity;
+        _baseFogStart = RenderSettings.fogStartDistance;
+        _baseFogEnd = RenderSettings.fogEndDistance;
+        _baselineCaptured = true;
+    }
+
+    // Used by the dashboard preview so the baseline is re-read from the scene
+    public void ResetBaseline()
+    {
+        _baselineCaptured = false;
+    }
+
     private void Start()
     {
+        if (!_baselineCaptured) CaptureBaseline();
+
         if (atmoNames != null && atmoIsDefault != null)
         {
             for (int i = 0; i < atmoNames.Length && i < atmoIsDefault.Length; i++)
@@ -102,18 +137,44 @@ public class StrangeHub : UdonSharpBehaviour
     public void ApplyAtmosphere(int index)
     {
         if (atmoNames == null || index < 0 || index >= atmoNames.Length) return;
+        if (!_baselineCaptured) CaptureBaseline();
+
+        // Start from the scene baseline so a preset only changes what it controls
+        Material skybox = _baseSkybox;
+        bool fog = _baseFog;
+        FogMode fogMode = _baseFogMode;
+        Color fogColor = _baseFogColor;
+        float fogDensity = _baseFogDensity;
+        float fogStart = _baseFogStart;
+        float fogEnd = _baseFogEnd;
 
         if (atmoSkyboxes != null && index < atmoSkyboxes.Length && atmoSkyboxes[index] != null)
-            RenderSettings.skybox = atmoSkyboxes[index];
+            skybox = atmoSkyboxes[index];
 
         if (atmoControlFog != null && index < atmoControlFog.Length && atmoControlFog[index])
         {
+            fog = true;
             if (atmoFogColors != null && index < atmoFogColors.Length)
-                RenderSettings.fogColor = atmoFogColors[index];
+                fogColor = atmoFogColors[index];
             if (atmoFogDensities != null && index < atmoFogDensities.Length)
-                RenderSettings.fogDensity = atmoFogDensities[index];
-            RenderSettings.fog = true;
+                fogDensity = atmoFogDensities[index];
+            if (atmoFogModes != null && index < atmoFogModes.Length && atmoFogModes[index] > 0)
+                fogMode = (FogMode)atmoFogModes[index];
+            if (atmoFogStarts != null && index < atmoFogStarts.Length && atmoFogEnds != null && index < atmoFogEnds.Length
+                && atmoFogEnds[index] > atmoFogStarts[index])
+            {
+                fogStart = atmoFogStarts[index];
+                fogEnd = atmoFogEnds[index];
+            }
         }
+
+        RenderSettings.skybox = skybox;
+        RenderSettings.fog = fog;
+        RenderSettings.fogMode = fogMode;
+        RenderSettings.fogColor = fogColor;
+        RenderSettings.fogDensity = fogDensity;
+        RenderSettings.fogStartDistance = fogStart;
+        RenderSettings.fogEndDistance = fogEnd;
 
         if (atmoRoots != null)
         {

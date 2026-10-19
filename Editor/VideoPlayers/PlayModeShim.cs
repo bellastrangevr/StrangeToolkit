@@ -4,7 +4,7 @@ using UnityEngine;
 using VRC.SDK3.Components.Video;
 using VRC.SDKBase;
 
-#if AVPRO_IMPORTED
+#if AVPRO_IMPORTED && !STRANGE_DISABLE_AVPRO
 using VRC.SDK3.Video.Components.AVPro;
 using VRC.SDK3.Video.Interfaces.AVPro;
 using RenderHeads.Media.AVProVideo;
@@ -17,7 +17,7 @@ namespace StrangeToolkit
     /// </summary>
     internal static class PlayModeShim
     {
-#if AVPRO_IMPORTED
+#if AVPRO_IMPORTED && !STRANGE_DISABLE_AVPRO
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         public static void SceneInit()
         {
@@ -120,7 +120,7 @@ namespace StrangeToolkit
 #endif
     }
 
-#if AVPRO_IMPORTED
+#if AVPRO_IMPORTED && !STRANGE_DISABLE_AVPRO
     /// <summary>
     /// AVPro video player implementation for in-editor playback.
     /// Handles URL resolution via yt-dlp and media playback events.
