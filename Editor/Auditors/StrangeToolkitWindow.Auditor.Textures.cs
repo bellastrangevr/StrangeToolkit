@@ -142,12 +142,26 @@ namespace StrangeToolkit
         {
             if (textures == null || textures.Count == 0) return;
 
-            foreach (var t in textures)
+            // Import settings changes can't be undone with Ctrl+Z, so ask first
+            if (!EditorUtility.DisplayDialog("Apply Android texture overrides?",
+                $"This changes the Android import settings of {textures.Count} texture(s) to ASTC 6x6, max 2048.\n\n" +
+                "Ctrl+Z can't undo import settings. To revert, untick 'Override for Android' on each texture.\n\n" +
+                "PC settings are not touched.",
+                "Apply", "Cancel"))
+                return;
+
+            // Batch the reimports into one pass instead of one per texture
+            AssetDatabase.StartAssetEditing();
+            try
             {
-                string path = AssetDatabase.GetAssetPath(t);
-                TextureImporter importer = AssetImporter.GetAtPath(path) as TextureImporter;
-                if (importer != null)
+                for (int i = 0; i < textures.Count; i++)
                 {
+                    string path = AssetDatabase.GetAssetPath(textures[i]);
+                    if (EditorUtility.DisplayCancelableProgressBar("Android texture overrides", path, (float)i / textures.Count)) break;
+
+                    TextureImporter importer = AssetImporter.GetAtPath(path) as TextureImporter;
+                    if (importer == null) continue;
+
                     var settings = importer.GetPlatformTextureSettings("Android");
                     settings.overridden = true;
                     settings.format = TextureImporterFormat.ASTC_6x6;
@@ -155,6 +169,11 @@ namespace StrangeToolkit
                     importer.SetPlatformTextureSettings(settings);
                     importer.SaveAndReimport();
                 }
+            }
+            finally
+            {
+                AssetDatabase.StopAssetEditing();
+                EditorUtility.ClearProgressBar();
             }
 
             StrangeToolkitLogger.LogSuccess($"Applied Android overrides to {textures.Count} textures.");

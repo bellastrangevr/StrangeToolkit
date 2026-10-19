@@ -15,19 +15,7 @@ namespace StrangeToolkit
         private static Type _cachedAudioLinkType;
         private static bool _audioLinkTypeChecked;
 
-        public static Type FindTypeInAllAssemblies(string fullName)
-        {
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                try
-                {
-                    var type = assembly.GetType(fullName);
-                    if (type != null) return type;
-                }
-                catch (Exception) { }
-            }
-            return null;
-        }
+        public static Type FindTypeInAllAssemblies(string fullName) => TypeLookup.FindInAllAssemblies(fullName);
 
         public static Type GetAudioLinkType()
         {

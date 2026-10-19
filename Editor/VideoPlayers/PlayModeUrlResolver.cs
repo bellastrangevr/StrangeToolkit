@@ -82,7 +82,10 @@ namespace StrangeToolkit
                     }
                 }
             }
-            catch (Exception) { }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Strange Video Playback] Couldn't search the VRChat Tools folder for yt-dlp: {e.Message}");
+            }
 #endif
 
             // Hunt via PATH
@@ -136,7 +139,10 @@ namespace StrangeToolkit
                     return resolved;
                 }
             }
-            catch (Exception) { }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Strange Video Playback] Couldn't search PATH for yt-dlp: {e.Message}");
+            }
 
             Debug.Log("[Strange Video Playback] Unable to find yt-dlp. Video URL resolution will be limited.");
             return "";

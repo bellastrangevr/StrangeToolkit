@@ -473,16 +473,7 @@ public class StrangeToggleEditor : Editor
         if (vrcUIMaterial != null) checkImage.material = vrcUIMaterial;
 
         // Try to add TextMeshPro for header and button label
-        System.Type tmpType = null;
-        foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies())
-        {
-            try
-            {
-                tmpType = assembly.GetType("TMPro.TextMeshProUGUI");
-                if (tmpType != null) break;
-            }
-            catch { }
-        }
+        System.Type tmpType = TypeLookup.FindInAllAssemblies("TMPro.TextMeshProUGUI");
 
         if (tmpType != null)
         {

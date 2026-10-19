@@ -457,7 +457,11 @@ namespace StrangeToolkit
                     }
                 }
             }
-            catch { }
+            catch (System.Exception e)
+            {
+                // Not fatal: the toggle is still removed, but its hidden UdonBehaviour may be left behind
+                StrangeToolkitLogger.LogWarning($"Couldn't find the toggle's backing UdonBehaviour, it may need removing by hand: {e.Message}");
+            }
 
             // Destroy the UdonSharpBehaviour
             Undo.DestroyObjectImmediate(toggle);
@@ -745,16 +749,7 @@ namespace StrangeToolkit
             if (vrcUIMaterial != null) checkImage.material = vrcUIMaterial;
 
             // Try to add TextMeshPro for header and button label
-            System.Type tmpType = null;
-            foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies())
-            {
-                try
-                {
-                    tmpType = assembly.GetType("TMPro.TextMeshProUGUI");
-                    if (tmpType != null) break;
-                }
-                catch { }
-            }
+            System.Type tmpType = TypeLookup.FindInAllAssemblies("TMPro.TextMeshProUGUI");
 
             if (tmpType != null)
             {

@@ -585,16 +585,7 @@ public class StrangeCleanupEditor : Editor
         button.targetGraphic = buttonImage;
 
         // Try to add TextMeshPro
-        System.Type tmpType = null;
-        foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies())
-        {
-            try
-            {
-                tmpType = assembly.GetType("TMPro.TextMeshProUGUI");
-                if (tmpType != null) break;
-            }
-            catch (System.Exception) { }
-        }
+        System.Type tmpType = TypeLookup.FindInAllAssemblies("TMPro.TextMeshProUGUI");
 
         if (tmpType != null)
         {

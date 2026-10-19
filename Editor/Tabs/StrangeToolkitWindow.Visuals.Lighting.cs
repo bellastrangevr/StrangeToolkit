@@ -315,7 +315,8 @@ namespace StrangeToolkit
             var newPreset = CreateInstance<LightingPreset>();
 
             LightingSettings lightingSettings = null;
-            try { lightingSettings = Lightmapping.lightingSettings; } catch { }
+            // Unity throws when the scene has no Lighting Settings asset; that case falls back to defaults below
+            try { lightingSettings = Lightmapping.lightingSettings; } catch (System.Exception) { }
             if (lightingSettings == null) lightingSettings = new LightingSettings();
 
             var lightmapSettingsSO = new SerializedObject(lightingSettings);
@@ -354,7 +355,8 @@ namespace StrangeToolkit
         private LightingSettings GetOrCreateLightingSettings()
         {
             LightingSettings lightingSettings = null;
-            try { lightingSettings = Lightmapping.lightingSettings; } catch { }
+            // Unity throws when the scene has no Lighting Settings asset; that case falls back to defaults below
+            try { lightingSettings = Lightmapping.lightingSettings; } catch (System.Exception) { }
 
             if (lightingSettings == null)
             {
