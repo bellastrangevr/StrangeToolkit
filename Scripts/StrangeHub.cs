@@ -11,7 +11,9 @@ public class StrangeHub : UdonSharpBehaviour
     [UdonSynced]
     public float videoTimestamp = 0f;
 
-    // Atmosphere data (parallel arrays for Udon)
+    // Atmosphere data: parallel arrays, one entry per preset (Udon can't hold custom data types well).
+    // Adding a setting? Also add its name to Editor/Atmosphere/AtmosphereFields.cs so the dashboard keeps the
+    // arrays in line. ApplyAtmosphere's rules are mirrored in AtmosphereMath for the editor; keep them in step.
     public string[] atmoNames;
     public bool[] atmoIsDefault;
     public Material[] atmoSkyboxes;
