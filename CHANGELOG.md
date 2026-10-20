@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [2.2.0] - 2026-10-19
 
 ### Security
 - **In-editor video playback could run programs on your PC.** Video URLs were pasted straight into the yt-dlp command, so a URL from a scene, prefab or shared playlist could add options like `--exec`. URLs are now validated and passed after `--`, and yt-dlp only runs for https links
