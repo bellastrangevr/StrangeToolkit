@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.2.1] - 2026-10-30
+
+### Added
+- **Strange Toolkit > Repair and Uninstall.** Mainly for installs from the .unitypackage, but works for VCC installs too. It is in its own assembly, so the menu still appears when the rest of the toolkit doesn't compile
+  - **Files:** finds and fixes duplicate copies of toolkit files, leftovers from older versions (a .unitypackage import never deletes old files, and they stop the toolkit compiling), files moved out of the toolkit folder, and files whose ID Unity changed (which unlinks scenes and Udon programs from their scripts). Your expansion folders are never touched
+  - **Components:** re-links missing toolkit scripts in scenes and prefabs, wires toolkit Udon behaviours to their programs, removes broken duplicates and empty extra Udon behaviours, and warns when a scene has more than one Strange Hub (each holds its own atmosphere presets)
+  - **Uninstall:** removes every Strange Toolkit component from your scenes and prefabs, saves them, then deletes the toolkit. GameObjects, materials and lighting stay as they are, and no missing scripts or Udon errors are left behind. For VCC installs it cleans the scenes, then asks you to remove the package in the Creator Companion
+- After upgrading with a .unitypackage, if Unity shows compile errors: restart Unity, choose **Ignore** on the Safe Mode prompt, then run **Strange Toolkit > Repair and Uninstall > Check Files**. ("Enter Safe Mode" loads no scripts, so the menu isn't there.)
+
+### Fixed
+- **Installing through the Creator Companion now removes a .unitypackage copy** (`Assets/com.bellastrangevr.strangetoolkit`). Having both stopped every toolkit script from compiling, and with two copies Unity compiles none of them, so not even the Repair window could run. Updating to this version in the VCC cleans it up
+
 ## [2.2.0] - 2026-10-19
 
 ### Security

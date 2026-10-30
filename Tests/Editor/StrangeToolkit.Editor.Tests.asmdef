@@ -4,6 +4,7 @@
     "references": [
         "StrangeToolkit.Editor",
         "StrangeToolkit",
+        "StrangeToolkit.Repair",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

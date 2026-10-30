@@ -1,7 +1,7 @@
 {
   "name": "com.bellastrangevr.strangetoolkit",
   "displayName": "Strange Toolkit - World Tools",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "VRChat world toolkit with atmosphere presets, smart toggles, world auditing, and optimization tools",
   "author": {
     "name": "bellastrangevr"
@@ -10,7 +10,8 @@
     "com.vrchat.worlds": ">=3.9.0"
   },
   "legacyFolders": {
-    "Assets/StrangeToolkit": ""
+    "Assets/StrangeToolkit": "",
+    "Assets/com.bellastrangevr.strangetoolkit": ""
   },
   "legacyFiles": {},
   "type": "tool"

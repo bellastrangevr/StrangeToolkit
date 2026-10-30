@@ -53,6 +53,10 @@ jobs:
           field: url
           value: 'https://github.com/${{ github.repository }}/releases/download/${{ steps.tag.outputs.prop }}/${{ env.zipFile }}'
 
+      - name: Write File List
+        if: ${{ steps.checkReleaseTag.outputs.exists == 'false' }}
+        run: bash .github/scripts/make-file-list.sh
+
       - name: Create directory and move files
         if: ${{ steps.checkReleaseTag.outputs.exists == 'false' }}
         run: |
