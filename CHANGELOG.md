@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.2.2] - 2026-10-30
+
+### Added
+- **The toolkit checks its own files when Unity opens.** Once per session it looks for duplicates, old leftover files, moved files and changed IDs, and if anything is wrong it asks once: **Fix Now**, **Not Now** or **Show Details**. Updating in the VCC and clicking Fix Now is all it takes
+
+### Fixed
+- **"Source C# script on StrangeVideo Udon C# Program Asset is null"** (or any toolkit script): a toolkit Udon program that lost its script is linked back to it, by the startup check or by Check Files, and Udon recompiles straight away
+
 ## [2.2.1] - 2026-10-30
 
 ### Added

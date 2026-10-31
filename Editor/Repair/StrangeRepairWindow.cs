@@ -107,8 +107,10 @@ namespace StrangeToolkit.Repair
             int delete = _fileProblems.Count(p => p.Kind == FileProblemKind.Duplicate || p.Kind == FileProblemKind.Leftover);
             int move = _fileProblems.Count(p => p.Kind == FileProblemKind.Misplaced);
             int relink = _fileProblems.Count(p => p.Kind == FileProblemKind.WrongId);
+            int programs = _fileProblems.Count(p => p.Kind == FileProblemKind.Unlinked);
             return EditorUtility.DisplayDialog("Fix toolkit files?",
-                $"Delete {delete} duplicate or leftover file(s)\nMove {move} file(s) back into the toolkit\nRestore the ID of {relink} file(s)\n\n" +
+                $"Delete {delete} duplicate or leftover file(s)\nMove {move} file(s) back into the toolkit\nRestore the ID of {relink} file(s)\n" +
+                $"Re-link {programs} Udon program(s) to their script\n\n" +
                 "Only toolkit files are touched. Unity recompiles afterwards.", "Fix", "Cancel");
         }
 
@@ -121,6 +123,7 @@ namespace StrangeToolkit.Repair
                 case FileProblemKind.Misplaced: return "Moved out of the toolkit (will be moved back)";
                 case FileProblemKind.WrongId: return "ID changed by Unity (will be restored)";
                 case FileProblemKind.IdTaken: return "ID used by another asset (can't fix here)";
+                case FileProblemKind.Unlinked: return "Udon program lost its script (will be re-linked)";
                 default: return "Missing (reimport the toolkit)";
             }
         }

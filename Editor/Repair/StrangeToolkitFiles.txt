@@ -26,6 +26,7 @@ a650c27431c0b4b4f8f0cb3fdd95afbf	Editor/Inspectors/AtmospherePresetEditor.cs
 588d168376d64cb42850a72ea564a3ec	Editor/Inspectors/StrangeVideoEditor.cs
 c9c8660f175144239485a47a00febfd8	Editor/Repair/ComponentRepair.cs
 b54c028c88d44dab918116196f1634a7	Editor/Repair/InstallRepair.cs
+b5b8aa5beb644c25a5666c344b8ae9ce	Editor/Repair/StrangeRepairStartup.cs
 f6a2e48ec69c47b1aad642100bd9528e	Editor/Repair/StrangeRepairWindow.cs
 8918b0c71c484147a42de1f969793079	Editor/Repair/StrangeToolkit.Repair.asmdef
 f8411e7cd3c34e778a08ca6f4e094e89	Editor/Repair/StrangeToolkitFiles.txt

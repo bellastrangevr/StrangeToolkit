@@ -13,6 +13,7 @@ namespace StrangeToolkit.Repair
         WrongId,    // a toolkit file whose GUID Unity changed, so scenes and Udon lose their link to it
         IdTaken,    // another asset holds the toolkit file's GUID; can't be fixed without touching that asset
         Missing,    // a toolkit file that isn't in the project at all
+        Unlinked,   // a toolkit Udon program that lost its script ("Source C# script ... is null")
     }
 
     public sealed class FileProblem
@@ -70,7 +71,47 @@ namespace StrangeToolkit.Repair
 
             problems.InsertRange(0, leftovers.OrderBy(p => p).Select(p => new FileProblem { Kind = FileProblemKind.Leftover, Path = p }));
             problems.InsertRange(0, duplicates.OrderBy(p => p).Select(p => new FileProblem { Kind = FileProblemKind.Duplicate, Path = p }));
+            problems.AddRange(UnlinkedPrograms(files).Select(u => new FileProblem { Kind = FileProblemKind.Unlinked, Path = u.program, Target = u.script }));
             return problems;
+        }
+
+        // Toolkit Udon programs whose script reference is empty, paired with the toolkit script of the same name
+        private static IEnumerable<(string program, string script)> UnlinkedPrograms(ToolkitFiles files)
+        {
+            foreach (string guid in AssetDatabase.FindAssets("t:UdonSharpProgramAsset", new[] { files.Root }))
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                var program = AssetDatabase.LoadAssetAtPath<UdonSharp.UdonSharpProgramAsset>(path);
+                if (program == null || program.sourceCsScript != null) continue;
+                string script = Path.ChangeExtension(path, ".cs").Replace('\\', '/');
+                if (AssetDatabase.LoadAssetAtPath<MonoScript>(script) != null) yield return (path, script);
+            }
+        }
+
+        // Points each unlinked program back at its script. Run last, after GUIDs are restored, on the live state.
+        private static int RelinkPrograms(ToolkitFiles files)
+        {
+            int count = 0;
+            foreach (var (programPath, scriptPath) in UnlinkedPrograms(files).ToList())
+            {
+                var program = AssetDatabase.LoadAssetAtPath<UdonSharp.UdonSharpProgramAsset>(programPath);
+                program.sourceCsScript = AssetDatabase.LoadAssetAtPath<MonoScript>(scriptPath);
+                EditorUtility.SetDirty(program);
+                count++;
+            }
+            if (count > 0)
+            {
+                AssetDatabase.SaveAssets();
+                UdonSharp.UdonSharpProgramAsset.CompileAllCsPrograms(true); // clears the "script is null" error now
+            }
+            return count;
+        }
+
+        /// <summary>Whether anything Fix can do is wrong. Used by the check that runs when the editor loads.</summary>
+        public static bool NeedsFix(ToolkitFiles files, out List<FileProblem> problems)
+        {
+            problems = Scan(files);
+            return problems.Any(p => p.Fixable && !(p.Kind == FileProblemKind.Leftover && files.IsDevelopmentCopy));
         }
 
         // Toolkit scripts, asmdefs and UdonSharp assets copied somewhere else in Assets. A script counts when it has the
@@ -186,6 +227,9 @@ namespace StrangeToolkit.Repair
             }
 
             AssetDatabase.Refresh(rewrote ? ImportAssetOptions.ForceUpdate : ImportAssetOptions.Default);
+
+            // 4. Udon programs that still have no script (their script's GUID was taken by another asset, say)
+            RelinkPrograms(files);
             return failures;
         }
 
