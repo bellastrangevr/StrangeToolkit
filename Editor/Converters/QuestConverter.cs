@@ -16,11 +16,7 @@ namespace StrangeToolkit
         {
             // 1. Safety Checks
             var currentScene = SceneManager.GetActiveScene();
-            if (currentScene.isDirty)
-            {
-                if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
-                    return;
-            }
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
 
             if (string.IsNullOrEmpty(currentScene.path))
             {
@@ -29,7 +25,7 @@ namespace StrangeToolkit
             }
 
             // 2. Pre-Flight Calculation
-            Renderer[] renderers = Object.FindObjectsByType<Renderer>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            Renderer[] renderers = currentScene.GetRootGameObjects().SelectMany(root => root.GetComponentsInChildren<Renderer>(true)).ToArray();
             HashSet<Material> uniqueMaterials = new HashSet<Material>();
             foreach (var r in renderers)
             {
@@ -57,125 +53,54 @@ namespace StrangeToolkit
 
         private static void PerformConversion(UnityEngine.SceneManagement.Scene sourceScene, HashSet<Material> materialsToClone)
         {
-            string sceneName = sourceScene.name;
-            string questScenePath = sourceScene.path.Replace(".unity", "_Quest.unity");
-            
-            // Create folder structure
-            string safeFolderName = sceneName + "_Quest_Assets";
-            string targetFolder = $"{GENERATED_FOLDER}/{safeFolderName}";
-            
-            if (!Directory.Exists(GENERATED_FOLDER)) Directory.CreateDirectory(GENERATED_FOLDER);
-            if (!Directory.Exists(targetFolder)) Directory.CreateDirectory(targetFolder);
-
-            AssetDatabase.Refresh();
-
-            // 1. Duplicate Scene
-            if (!AssetDatabase.CopyAsset(sourceScene.path, questScenePath))
-            {
-                StrangeToolkitLogger.LogError("Failed to copy scene.");
-                return;
-            }
-
-            // 2. Open New Scene
-            EditorSceneManager.OpenScene(questScenePath);
-
-            // 3. Material Isolation (The Heavy Lifting)
-            Dictionary<Material, string> pathMapping = new Dictionary<Material, string>();
-            HashSet<string> usedNames = new HashSet<string>();
-
+            string sourcePath = sourceScene.path;
+            string questScenePath = sourcePath.Replace(".unity", "_Quest.unity");
+            int suffix = 1;
+            while (File.Exists(questScenePath))
+                questScenePath = sourcePath.Replace(".unity", "_" + suffix++ + "_Quest.unity");
+            MaterialIsolation.EnsureFolder(GENERATED_FOLDER);
+            string targetFolder = AssetDatabase.GenerateUniqueAssetPath(GENERATED_FOLDER + "/" + sourceScene.name + "_Quest_Assets");
+            bool sceneCopied = false;
             try
             {
-                // PHASE 1: Batch Copy (Fast, no imports)
-                AssetDatabase.StartAssetEditing();
-                EditorUtility.DisplayProgressBar("Quest Conversion", "Cloning Materials...", 0.5f);
-
-                // Clone Materials
-                foreach (Material originalMat in materialsToClone)
+                MaterialIsolation.EnsureFolder(targetFolder);
+                var mapping = new Dictionary<Material, Material>();
+                foreach (var original in materialsToClone)
                 {
-                    string originalPath = AssetDatabase.GetAssetPath(originalMat);
-                    // Skip built-in materials (empty path or Unity internal resources)
-                    if (string.IsNullOrEmpty(originalPath) ||
-                        originalPath.StartsWith("Resources/") ||
-                        originalPath.Contains("unity_builtin")) continue;
-
-                    string matName = Path.GetFileName(originalPath);
-                    
-                    // Manual uniqueness check (AssetDatabase won't update during batching)
-                    string baseName = Path.GetFileNameWithoutExtension(matName);
-                    string ext = Path.GetExtension(matName);
-                    int counter = 1;
-                    string uniqueName = matName;
-                    while (usedNames.Contains(uniqueName))
-                    {
-                        uniqueName = $"{baseName} {counter}{ext}";
-                        counter++;
-                    }
-                    usedNames.Add(uniqueName);
-
-                    string newPath = $"{targetFolder}/{uniqueName}";
-
-                    if (AssetDatabase.CopyAsset(originalPath, newPath))
-                    {
-                        pathMapping[originalMat] = newPath;
-                    }
+                    if (EditorUtility.DisplayCancelableProgressBar("Quest Conversion", original.name, (float)mapping.Count / Mathf.Max(1, materialsToClone.Count)))
+                        throw new System.OperationCanceledException();
+                    mapping.Add(original, MaterialIsolation.Clone(original, targetFolder));
                 }
-            }
-            catch (System.Exception e)
-            {
-                StrangeToolkitLogger.LogError($"Conversion Error: {e.Message}");
-            }
-            finally
-            {
-                AssetDatabase.StopAssetEditing();
-            }
-
-            // PHASE 2: Import & Remap (Happens once)
-            AssetDatabase.Refresh();
-
-            try
-            {
-                EditorUtility.DisplayProgressBar("Quest Conversion", "Remapping Materials...", 0.8f);
-
-                // Load the now-imported assets
-                Dictionary<Material, Material> finalMapping = new Dictionary<Material, Material>();
-                foreach (var kvp in pathMapping)
+                if (!AssetDatabase.CopyAsset(sourcePath, questScenePath))
+                    throw new System.IO.IOException("Could not copy the source scene to " + questScenePath);
+                sceneCopied = true;
+                var scene = EditorSceneManager.OpenScene(questScenePath, OpenSceneMode.Single);
+                foreach (var renderer in scene.GetRootGameObjects().SelectMany(root => root.GetComponentsInChildren<Renderer>(true)))
                 {
-                    Material newMat = AssetDatabase.LoadAssetAtPath<Material>(kvp.Value);
-                    if (newMat != null)
-                        finalMapping[kvp.Key] = newMat;
+                    Undo.RecordObject(renderer, "Isolate Quest Materials");
+                    renderer.sharedMaterials = renderer.sharedMaterials.Select(material => material != null ? mapping[material] : null).ToArray();
+                    StrangeToolkit.EditorSupport.SceneEdit.Commit(renderer);
                 }
-
-                // Remap Renderers
-                Renderer[] newRenderers = Object.FindObjectsByType<Renderer>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-                foreach (var r in newRenderers)
-                {
-                    Material[] sharedMats = r.sharedMaterials;
-                    bool changed = false;
-
-                    for (int m = 0; m < sharedMats.Length; m++)
-                    {
-                        if (sharedMats[m] != null && finalMapping.ContainsKey(sharedMats[m]))
-                        {
-                            sharedMats[m] = finalMapping[sharedMats[m]];
-                            changed = true;
-                        }
-                    }
-
-                    if (changed)
-                    {
-                        r.sharedMaterials = sharedMats;
-                        EditorUtility.SetDirty(r);
-                    }
-                }
-            }
-            finally
-            {
-                EditorUtility.ClearProgressBar();
+                EditorSceneManager.MarkSceneDirty(scene);
+                if (!EditorSceneManager.SaveScene(scene)) throw new System.IO.IOException("Could not save " + questScenePath);
+                EditorPrefs.SetString("StrangeToolkit.PCScene." + AssetDatabase.AssetPathToGUID(questScenePath), AssetDatabase.AssetPathToGUID(sourcePath));
                 AssetDatabase.SaveAssets();
+                StrangeToolkitLogger.LogSuccess($"Quest conversion saved {questScenePath} with {mapping.Count} isolated materials.");
+                EditorUtility.DisplayDialog("Quest Conversion", "Quest scene saved with separate material assets.", "OK");
             }
-
-            StrangeToolkitLogger.LogSuccess($"Quest conversion complete! Cloned {pathMapping.Count} materials.");
-            EditorUtility.DisplayDialog("Success", "Quest Conversion Complete!\n\nYou are now in the Quest scene. All materials have been cloned to the 'StrangeToolkit_Generated' folder.", "OK");
+            catch (System.Exception exception)
+            {
+                if (sceneCopied) EditorSceneManager.OpenScene(sourcePath, OpenSceneMode.Single);
+                if (sceneCopied) AssetDatabase.DeleteAsset(questScenePath);
+                AssetDatabase.DeleteAsset(targetFolder);
+                if (exception is System.OperationCanceledException) StrangeToolkitLogger.Log("Quest conversion cancelled.");
+                else
+                {
+                    StrangeToolkitLogger.LogError("Quest conversion failed: " + exception);
+                    EditorUtility.DisplayDialog("Quest Conversion", "Conversion could not finish. The source scene was preserved. See the Console for details.", "OK");
+                }
+            }
+            finally { EditorUtility.ClearProgressBar(); }
         }
 
         // ==================================================================================
@@ -186,15 +111,17 @@ namespace StrangeToolkit
         public static void SyncTransformsFromPC()
         {
             var questScene = SceneManager.GetActiveScene();
+            string questPath = questScene.path;
             if (!questScene.name.EndsWith("_Quest")) { EditorUtility.DisplayDialog("Error", "This tool should be run from the _Quest scene.", "OK"); return; }
 
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
             
-            string pcPath = questScene.path.Replace("_Quest.unity", ".unity");
+            string sourceGuid = EditorPrefs.GetString("StrangeToolkit.PCScene." + AssetDatabase.AssetPathToGUID(questPath), "");
+            string pcPath = string.IsNullOrEmpty(sourceGuid) ? questPath.Replace("_Quest.unity", ".unity") : AssetDatabase.GUIDToAssetPath(sourceGuid);
             if (AssetDatabase.LoadAssetAtPath<SceneAsset>(pcPath) == null)
             {
                 StrangeToolkitLogger.LogWarning("Could not find matching PC scene automatically.");
-                pcPath = EditorUtility.OpenFilePanel("Select PC Source Scene", Path.GetDirectoryName(questScene.path), "unity");
+                pcPath = EditorUtility.OpenFilePanel("Select PC Source Scene", Path.GetDirectoryName(questPath), "unity");
 
                 if (string.IsNullOrEmpty(pcPath))
                 {
@@ -214,56 +141,84 @@ namespace StrangeToolkit
             if (!pcScene.IsValid())
             {
                 StrangeToolkitLogger.LogError($"Failed to open PC scene at: {pcPath}");
-                EditorSceneManager.OpenScene(questScene.path); // Reopen original scene
+                EditorSceneManager.OpenScene(questPath); // Reopen original scene
                 return;
             }
 
-            Dictionary<string, Queue<TransformData>> cache = new Dictionary<string, Queue<TransformData>>();
+            var cache = new Dictionary<string, List<TransformData>>();
             foreach (GameObject root in pcScene.GetRootGameObjects())
                 TraverseAndCache(root.transform, "", cache);
 
             // 2. Re-open Quest Scene
-            var reopenedQuest = EditorSceneManager.OpenScene(questScene.path, OpenSceneMode.Single);
-            int updatedCount = 0;
+            var reopenedQuest = EditorSceneManager.OpenScene(questPath, OpenSceneMode.Single);
+            var targetCounts = new Dictionary<string, int>();
             foreach (GameObject root in reopenedQuest.GetRootGameObjects())
-                ApplyCache(root.transform, "", cache, ref updatedCount);
+                CountTransformPaths(root.transform, "", targetCounts);
+            int updatedCount = 0;
+            int skippedBranches = 0;
+            foreach (GameObject root in reopenedQuest.GetRootGameObjects())
+                ApplyCache(root.transform, "", cache, targetCounts, ref updatedCount, ref skippedBranches);
 
             if (updatedCount > 0)
             {
                 EditorSceneManager.MarkSceneDirty(reopenedQuest);
             }
             
-            StrangeToolkitLogger.LogSuccess($"Synced transforms for {updatedCount} objects from PC scene '{Path.GetFileNameWithoutExtension(pcPath)}'");
-            EditorUtility.DisplayDialog("Sync Complete", $"Transforms synced for {updatedCount} objects from '{Path.GetFileNameWithoutExtension(pcPath)}'.", "OK");
+            string summary = $"Transforms updated for {updatedCount} objects from '{Path.GetFileNameWithoutExtension(pcPath)}'.";
+            if (skippedBranches > 0)
+            {
+                summary += $"\nSkipped {skippedBranches} ambiguous branches. Use matching, unique sibling names in both scenes before syncing them.";
+                StrangeToolkitLogger.LogWarning(summary);
+            }
+            else StrangeToolkitLogger.LogSuccess(summary);
+            EditorUtility.DisplayDialog("Transform Sync", summary, "OK");
         }
 
-        private static void TraverseAndCache(Transform t, string path, Dictionary<string, Queue<TransformData>> cache)
+        private static string TransformPath(string path, string name) => path + "/" + name.Length + ":" + name;
+
+        private static void TraverseAndCache(Transform t, string path, Dictionary<string, List<TransformData>> cache)
         {
-            string myPath = path + "/" + t.name;
+            string myPath = TransformPath(path, t.name);
             
             if (!cache.ContainsKey(myPath))
-                cache[myPath] = new Queue<TransformData>();
+                cache[myPath] = new List<TransformData>();
             
-            cache[myPath].Enqueue(new TransformData { pos = t.localPosition, rot = t.localRotation, scale = t.localScale });
+            cache[myPath].Add(new TransformData { pos = t.localPosition, rot = t.localRotation, scale = t.localScale });
             
             foreach (Transform child in t) TraverseAndCache(child, myPath, cache);
         }
 
-        private static void ApplyCache(Transform t, string path, Dictionary<string, Queue<TransformData>> cache, ref int count)
+        private static void CountTransformPaths(Transform t, string path, Dictionary<string, int> counts)
         {
-            string myPath = path + "/" + t.name;
-            if (cache.TryGetValue(myPath, out Queue<TransformData> queue) && queue.Count > 0)
+            string myPath = TransformPath(path, t.name);
+            counts[myPath] = counts.TryGetValue(myPath, out int count) ? count + 1 : 1;
+            foreach (Transform child in t) CountTransformPaths(child, myPath, counts);
+        }
+
+        private static void ApplyCache(Transform t, string path, Dictionary<string, List<TransformData>> cache,
+            Dictionary<string, int> targetCounts, ref int count, ref int skippedBranches)
+        {
+            string myPath = TransformPath(path, t.name);
+            cache.TryGetValue(myPath, out var matches);
+            if ((matches != null && matches.Count > 1) || targetCounts[myPath] > 1)
             {
-                TransformData data = queue.Dequeue();
+                skippedBranches++;
+                return;
+            }
+            if (matches != null && matches.Count == 1)
+            {
+                TransformData data = matches[0];
                 if (t.localPosition != data.pos || t.localRotation != data.rot || t.localScale != data.scale)
                 {
+                    Undo.RecordObject(t, "Sync PC Transform");
                     t.localPosition = data.pos;
                     t.localRotation = data.rot;
                     t.localScale = data.scale;
+                    StrangeToolkit.EditorSupport.SceneEdit.Commit(t);
                     count++;
                 }
             }
-            foreach (Transform child in t) ApplyCache(child, myPath, cache, ref count);
+            foreach (Transform child in t) ApplyCache(child, myPath, cache, targetCounts, ref count, ref skippedBranches);
         }
     }
 }

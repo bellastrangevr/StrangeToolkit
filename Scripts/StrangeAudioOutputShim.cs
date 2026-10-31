@@ -36,6 +36,7 @@ public class StrangeAudioOutputShim :
 
     void OnDestroy()
     {
+        AudioSettings.OnAudioConfigurationChanged -= OnAudioConfigurationChanged;
         ChangeMediaPlayer(null);
     }
 
@@ -43,6 +44,7 @@ public class StrangeAudioOutputShim :
     {
         var source = GetAudioSource();
         if (source == null) source = CacheAudioSource();
+        if (source == null) return;
         _volume = source.volume;
         if (_spaInfo != null) _positionalAudio = (bool)_spaInfo.GetValue(this);
         if (Player != null && Player.Control != null)

@@ -44,7 +44,7 @@ namespace StrangeToolkit
             Shader s = Shader.Find(shaderName);
             if (s == null) { StrangeToolkitLogger.LogError($" Shader not found: {shaderName}"); return; }
             Undo.RecordObjects(mats.ToArray(), "Swap Quest Shaders");
-            foreach (var m in mats) { m.shader = s; EditorUtility.SetDirty(m); }
+            foreach (var m in mats) { m.shader = s; StrangeToolkit.EditorSupport.SceneEdit.Commit(m); }
         }
 
         public static List<Texture> GetTexturesMissingAndroidOverrides()
@@ -131,9 +131,6 @@ namespace StrangeToolkit
                     if (importer != null)
                     {
                         EditorUtility.DisplayProgressBar("Optimizing Audio", clip.name, (float)i / clips.Count);
-
-                        // Force Mono
-                        importer.forceToMono = true;
 
                         // Android Settings
                         AudioImporterSampleSettings settings = importer.GetOverrideSampleSettings("Android");
@@ -243,7 +240,7 @@ namespace StrangeToolkit
             System.Type ppVolType = System.Type.GetType("UnityEngine.Rendering.PostProcessing.PostProcessVolume, Unity.Postprocessing.Runtime");
             if (ppVolType != null)
             {
-                var ppVols = Object.FindObjectsByType(ppVolType, FindObjectsSortMode.None) as Component[];
+                var ppVols = Object.FindObjectsByType(ppVolType, FindObjectsSortMode.None).OfType<Component>().ToArray();
                 if (ppVols != null) toDestroy.AddRange(ppVols);
             }
 
@@ -252,11 +249,7 @@ namespace StrangeToolkit
                 Undo.RecordObjects(toDestroy.Select(c => c.gameObject).ToArray(), "Remove Post Processing");
                 foreach (var c in toDestroy)
                 {
-                    // If it's the only component, disable the object, otherwise destroy component
-                    if (c.gameObject.GetComponents<Component>().Length <= 2) // Transform + Volume
-                        c.gameObject.SetActive(false);
-                    else
-                        Undo.DestroyObjectImmediate(c);
+                    Undo.DestroyObjectImmediate(c);
                 }
             }
         }

@@ -47,8 +47,8 @@ namespace StrangeToolkit
                 EditorGUILayout.EndHorizontal();
 
                 GUILayout.Label(_useWhitelistMode
-                    ? "Only listed items will be changed."
-                    : "Listed items are protected.", EditorStyles.miniLabel);
+                    ? "Listed objects receive converted material copies; original assets stay unchanged."
+                    : "Listed items are protected; other objects receive converted material copies.", EditorStyles.miniLabel);
 
                 GUILayout.Space(5);
 
@@ -244,54 +244,46 @@ namespace StrangeToolkit
                 return;
             }
 
-            int count = 0;
-            HashSet<Material> processedMats = new HashSet<Material>();
-
+            var copies = new Dictionary<Material, Material>();
+            var changed = new List<Renderer>();
+            const string folder = "Assets/StrangeToolkit_Generated/Materials";
+            foreach (var renderer in FindObjectsByType<Renderer>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                bool objectListed = IsObjectListed(renderer.gameObject);
+                var materials = renderer.sharedMaterials;
+                bool edited = false;
+                for (int index = 0; index < materials.Length; index++)
+                {
+                    var original = materials[index];
+                    if (original == null) continue;
+                    bool materialListed = IsMaterialListed(original);
+                    bool included = _useWhitelistMode ? objectListed || materialListed : !objectListed && !materialListed;
+                    if (!included) continue;
+                    if (!copies.TryGetValue(original, out var copy))
+                    {
+                        copy = MaterialIsolation.Clone(original, folder);
+                        SwapMaterialShader(copy, target);
+                        copies.Add(original, copy);
+                    }
+                    if (!edited) Undo.RecordObject(renderer, "Assign Converted Materials");
+                    materials[index] = copy;
+                    edited = true;
+                }
+                if (!edited) continue;
+                renderer.sharedMaterials = materials;
+                StrangeToolkit.EditorSupport.SceneEdit.Commit(renderer);
+                changed.Add(renderer);
+            }
+            // Explicit material selections that are not used in the scene still produce a converted copy.
             if (_useWhitelistMode)
-            {
-                foreach (Material m in _targetMaterials)
+                foreach (var original in _targetMaterials.Where(material => material != null && !copies.ContainsKey(material)))
                 {
-                    if (m == null) continue;
-                    SwapMaterialShader(m, target);
-                    processedMats.Add(m);
-                    count++;
+                    var copy = MaterialIsolation.Clone(original, folder);
+                    SwapMaterialShader(copy, target);
+                    copies.Add(original, copy);
                 }
-            }
-
-            Renderer[] rends = FindObjectsByType<Renderer>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-            foreach (var r in rends)
-            {
-                if (r == null) continue;
-
-                bool isObjListed = IsObjectListed(r.gameObject);
-
-                foreach (var m in r.sharedMaterials)
-                {
-                    if (m == null) continue;
-                    if (processedMats.Contains(m)) continue;
-
-                    bool isMatListed = IsMaterialListed(m);
-                    bool shouldSwap = false;
-
-                    if (_useWhitelistMode)
-                    {
-                        if (isObjListed || isMatListed) shouldSwap = true;
-                    }
-                    else
-                    {
-                        if (!isObjListed && !isMatListed) shouldSwap = true;
-                    }
-
-                    if (shouldSwap)
-                    {
-                        SwapMaterialShader(m, target);
-                        processedMats.Add(m);
-                        count++;
-                    }
-                }
-            }
-
-            StrangeToolkitLogger.LogSuccess($"Shader Swap Complete. Updated {count} materials to {shaderName}.");
+            AssetDatabase.SaveAssets();
+            StrangeToolkitLogger.LogSuccess($"Created {copies.Count} converted material copies and assigned {changed.Count} renderers. Original materials were preserved.");
         }
 
         // Groups of property names different shaders use for the same map, checked in order.
@@ -503,7 +495,7 @@ namespace StrangeToolkit
                     StrangeToolkitLogger.LogWarning($"'{m.name}' was two-sided but {target.name} doesn't expose a Cull property — backfaces will still be culled.");
             }
 
-            EditorUtility.SetDirty(m);
+            StrangeToolkit.EditorSupport.SceneEdit.Commit(m);
         }
 
         private bool IsObjectListed(GameObject target)

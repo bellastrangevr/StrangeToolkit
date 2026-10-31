@@ -61,7 +61,7 @@ namespace StrangeToolkit
                 {
                     _shadowScroll = EditorGUILayout.BeginScrollView(_shadowScroll, GUILayout.Height(Mathf.Min(120, _shadowIssues.Count * 24 + 10)));
 
-                    foreach (var issue in _shadowIssues)
+                    foreach (var issue in _shadowIssues.ToArray())
                     {
                         if (issue.renderer == null) continue;
                         DrawShadowIssueRow(issue);
@@ -113,7 +113,7 @@ namespace StrangeToolkit
             {
                 Undo.RecordObject(issue.renderer, "Disable Shadows");
                 issue.renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                EditorUtility.SetDirty(issue.renderer);
+                StrangeToolkit.EditorSupport.SceneEdit.Commit(issue.renderer);
                 RunExtendedScan();
             }
 
@@ -133,7 +133,7 @@ namespace StrangeToolkit
             foreach (var r in toFix)
             {
                 r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                EditorUtility.SetDirty(r);
+                StrangeToolkit.EditorSupport.SceneEdit.Commit(r);
             }
 
             StrangeToolkitLogger.LogSuccess($"Disabled shadows on {toFix.Count} renderers.");

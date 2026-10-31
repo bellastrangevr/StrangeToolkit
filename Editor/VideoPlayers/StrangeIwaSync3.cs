@@ -42,7 +42,7 @@ namespace StrangeToolkit
         {
             var t = GetPlayerType();
             if (t == null) return null;
-            return UnityEngine.Object.FindFirstObjectByType(t, FindObjectsInactive.Include) as Component;
+            return VideoPlayerContext.Find(t);
         }
 
         public static UnityEngine.Object[] FindAllInScene()
@@ -108,7 +108,7 @@ namespace StrangeToolkit
             var tSpeaker = VideoPlayerUtil.FindTypeInAllAssemblies(SpeakerTypeName);
             if (tSpeaker == null) return null;
 
-            var speakers = UnityEngine.Object.FindObjectsByType(tSpeaker, FindObjectsInactive.Include, FindObjectsSortMode.None);
+            var speakers = VideoPlayerContext.FindAll(tSpeaker);
             if (speakers == null || speakers.Length == 0) return null;
 
             // Prefer the primary speaker, fallback to first speaker

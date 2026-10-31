@@ -91,7 +91,7 @@ public class StrangeCleanupEditor : Editor
                 var list = new List<GameObject>(cleanup.cleanupProps);
                 list.RemoveAt(removeIndex);
                 cleanup.cleanupProps = list.ToArray();
-                EditorUtility.SetDirty(cleanup);
+                StrangeToolkit.EditorSupport.SceneEdit.Commit(cleanup);
 
                 // Remove VRCObjectSync if Global Sync was enabled
                 if (useGlobalSync.boolValue && removedProp != null)
@@ -142,7 +142,7 @@ public class StrangeCleanupEditor : Editor
                 }
 
                 cleanup.cleanupProps = props.ToArray();
-                EditorUtility.SetDirty(cleanup);
+                StrangeToolkit.EditorSupport.SceneEdit.Commit(cleanup);
 
                 // If Global Sync is enabled, add VRCObjectSync to newly added objects
                 if (newlyAdded.Count > 0 && useGlobalSync.boolValue)
@@ -439,7 +439,7 @@ public class StrangeCleanupEditor : Editor
         if (hadNulls)
         {
             cleanup.cleanupProps = validProps.ToArray();
-            EditorUtility.SetDirty(cleanup);
+            StrangeToolkit.EditorSupport.SceneEdit.Commit(cleanup);
         }
     }
 

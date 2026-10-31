@@ -107,7 +107,7 @@ public class StrangeHubEditor : Editor
                     {
                         Undo.RecordObject(toggle, "Link Toggle to Hub");
                         toggle.hub = hub;
-                        EditorUtility.SetDirty(toggle);
+                        StrangeToolkit.EditorSupport.SceneEdit.Commit(toggle);
                         StrangeToolkitLogger.LogSuccess($"Linked '{toggle.gameObject.name}' to Hub");
                     }
                     EditorGUILayout.EndHorizontal();
@@ -124,7 +124,7 @@ public class StrangeHubEditor : Editor
                         {
                             Undo.RecordObject(toggle, "Link Toggle to Hub");
                             toggle.hub = hub;
-                            EditorUtility.SetDirty(toggle);
+                            StrangeToolkit.EditorSupport.SceneEdit.Commit(toggle);
                         }
                         StrangeToolkitLogger.LogSuccess($"Linked {unlinkedToggles.Count} toggle(s) to Hub");
                     }

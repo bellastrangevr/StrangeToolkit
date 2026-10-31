@@ -54,7 +54,7 @@ namespace StrangeToolkit
         {
             var t = GetPlayerType();
             if (t == null) return null;
-            return UnityEngine.Object.FindFirstObjectByType(t, FindObjectsInactive.Include) as Component;
+            return VideoPlayerContext.Find(t);
         }
 
         public static UnityEngine.Object[] FindAllInScene()
@@ -71,7 +71,7 @@ namespace StrangeToolkit
         {
             var t = VideoPlayerUtil.FindTypeInAllAssemblies(YamaPlayerTypeName);
             if (t == null) return null;
-            return UnityEngine.Object.FindFirstObjectByType(t, FindObjectsInactive.Include) as Component;
+            return VideoPlayerContext.Find(t);
         }
 
         public static GameObject InstantiatePrefab()
@@ -88,7 +88,7 @@ namespace StrangeToolkit
         {
             var t = VideoPlayerUtil.FindTypeInAllAssemblies(PermissionManagementTypeName);
             if (t == null) return null;
-            return UnityEngine.Object.FindFirstObjectByType(t, FindObjectsInactive.Include) as Component;
+            return VideoPlayerContext.Find(t);
         }
 
         /// <summary>
@@ -98,7 +98,7 @@ namespace StrangeToolkit
         {
             var t = VideoPlayerUtil.FindTypeInAllAssemblies(AutoPlayTypeName);
             if (t == null) return null;
-            return UnityEngine.Object.FindFirstObjectByType(t, FindObjectsInactive.Include) as Component;
+            return VideoPlayerContext.Find(t);
         }
 
         /// <summary>
@@ -108,7 +108,7 @@ namespace StrangeToolkit
         {
             var t = VideoPlayerUtil.FindTypeInAllAssemblies(AudioLinkAdaptorTypeName);
             if (t == null) return null;
-            return UnityEngine.Object.FindFirstObjectByType(t, FindObjectsInactive.Include) as Component;
+            return VideoPlayerContext.Find(t);
         }
 
         /// <summary>
@@ -218,7 +218,7 @@ namespace StrangeToolkit
 
             Undo.RegisterCreatedObjectUndo(instance, undoName);
             instance.name = prefab.name;
-            EditorUtility.SetDirty(moduleManager.gameObject);
+            StrangeToolkit.EditorSupport.SceneEdit.Commit(moduleManager.gameObject);
             return instance;
         }
 

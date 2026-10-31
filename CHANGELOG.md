@@ -1,5 +1,36 @@
 # Changelog
 
+## [2.2.3] - 2026-10-31
+
+### Changed
+- The `.unitypackage` download now installs the toolkit into `Packages/com.bellastrangevr.strangetoolkit/`. Its temporary installer removes itself from `Assets`, backs up previous installations, and preserves custom files and their asset IDs.
+- Shader swapping creates separate material copies and assigns them to included objects. Excluded objects keep their existing materials.
+- The instancing converter now configures native renderers. Legacy conversions restore their original objects instead of relying on runtime drawing scripts.
+- Video settings are split into integration panels and use the selected player's hierarchy. Incompatible component versions show a warning instead of editing missing fields.
+
+### Fixed
+- Uninstall identifies shipped scripts and programs from the file inventory. Custom components and files are preserved; legacy installs with custom content remove only shipped files. Program relinking also leaves unlisted user programs alone.
+- Material consolidation respects blacklisted materials in every renderer slot.
+- PC-to-Quest transform synchronization skips ambiguous duplicate-name branches and reports them. Names containing slashes no longer collide with hierarchy paths.
+- New video owners restore the received playback state before publishing, including when loading, playing or seeking completes asynchronously.
+- Release `.unitypackage` archives now use gzip compression.
+- Reimporting the installer reuses the project's compiled Udon programs and batches package replacement to avoid importing a partially replaced toolkit.
+- File repair detects renamed and numbered copies of Udon program assets by source identity, including their generated compiled programs. Referenced copies are retained until their references are repaired; component repair selects the toolkit's canonical programs.
+- Component repair requires a known toolkit script identity. Unknown missing scripts and unlisted custom files are preserved, and references protect duplicate C# files from deletion.
+- Whole-project component repair saves changed scenes, including scenes already open, and reports scenes that cannot be saved.
+- Quest conversion isolates material assets, records prefab overrides, preserves existing Quest scenes, and stops on failure. Transform synchronization keeps the selected source scene path across scene switches.
+- Disabling post-processing affects its component, so other scripts and children on the object remain active.
+- Built-in video synchronization shares URLs, playback position, pause and stop state, and corrects ongoing client drift. Replaying a URL and ownership changes retain one synchronization loop.
+- Video URL resolution drains both process streams, times out, and terminates pending processes on Play Mode exit, assembly reload, or player deletion. Direct playback remains available without yt-dlp.
+- AVPro trial downloads require a successful, nonempty response before import and release their request resources.
+- Atmosphere selection advances from the applied preset. Editor previews restore scene settings on save, close, reload, and entry into Play Mode.
+- Creating video helpers lets UdonSharp create their backing behaviours, avoiding empty extra Udon components.
+- Auditor row actions can rescan without invalidating their current lists. Instancing changes preserve other static flags and retain revert data across rescans and editor reloads.
+- Audio optimization preserves channel layout and applies sample settings only to the selected platform. Texture edits use Unity's documented Standalone platform identifier.
+- Texture estimates account for compressed blocks, mip levels, array layers, and multisampling. Compression detection uses format metadata.
+- Build-size logs use the current Editor log, invariant numbers, and a matching saved scene; unverified logs fall back to estimates.
+- VPM listing generation reads every release page and serializes listing updates.
+
 ## [2.2.2] - 2026-10-30
 
 ### Added

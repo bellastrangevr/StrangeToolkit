@@ -148,6 +148,7 @@ public class StrangeHub : UdonSharpBehaviour
     public void ApplyAtmosphere(int index)
     {
         if (atmoNames == null || index < 0 || index >= atmoNames.Length) return;
+        _currentIndex = index;
         if (!_baselineCaptured) CaptureBaseline();
 
         // Start from the scene baseline so a preset only changes what it controls

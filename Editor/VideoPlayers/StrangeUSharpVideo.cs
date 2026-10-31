@@ -39,7 +39,7 @@ namespace StrangeToolkit
         {
             var t = GetPlayerType();
             if (t == null) return null;
-            return UnityEngine.Object.FindFirstObjectByType(t, FindObjectsInactive.Include) as Component;
+            return VideoPlayerContext.Find(t);
         }
 
         public static UnityEngine.Object[] FindAllInScene()
@@ -88,7 +88,7 @@ namespace StrangeToolkit
                 var tManager = VideoPlayerUtil.FindTypeInAllAssemblies(VideoPlayerManagerTypeName);
                 if (tManager != null)
                 {
-                    var manager = UnityEngine.Object.FindFirstObjectByType(tManager, FindObjectsInactive.Include) as Component;
+                    var manager = VideoPlayerContext.Find(tManager);
                     if (manager != null)
                     {
                         var so = new SerializedObject(manager);

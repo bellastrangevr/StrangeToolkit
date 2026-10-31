@@ -72,7 +72,7 @@ namespace StrangeToolkit
                 };
             }
 
-            EditorUtility.SetDirty(preset);
+            StrangeToolkit.EditorSupport.SceneEdit.Commit(preset);
             AssetDatabase.SaveAssets();
             StrangeToolkitLogger.LogSuccess($"Successfully captured {currentLightmaps.Length} lightmap(s) into '{preset.name}'.");
         }

@@ -120,7 +120,7 @@ namespace StrangeToolkit
                         }
                     }
 
-                    EditorUtility.SetDirty(obj);
+                    StrangeToolkit.EditorSupport.SceneEdit.Commit(obj);
                     addedCount++;
                     _toggleExpanded[toggle] = true;
                 }
@@ -220,7 +220,7 @@ namespace StrangeToolkit
                             {
                                 Undo.RecordObject(toggle, "Link Toggle to Hub");
                                 toggle.hub = hub;
-                                EditorUtility.SetDirty(toggle);
+                                StrangeToolkit.EditorSupport.SceneEdit.Commit(toggle);
                             }
                             StrangeToolkitLogger.LogSuccess($"Linked {unlinkedToggles.Count} toggle(s) to Hub");
                         }
@@ -269,7 +269,7 @@ namespace StrangeToolkit
                 {
                     Undo.RecordObject(toggle, "Link Toggle to Hub");
                     toggle.hub = hub;
-                    EditorUtility.SetDirty(toggle);
+                    StrangeToolkit.EditorSupport.SceneEdit.Commit(toggle);
                     StrangeToolkitLogger.LogSuccess($"Linked '{toggle.gameObject.name}' to Hub");
                 }
             }
@@ -384,7 +384,7 @@ namespace StrangeToolkit
                     {
                         Undo.RecordObject(toggle, "Generate New ID");
                         toggle.persistenceID = Guid.NewGuid().ToString().Substring(0, 8);
-                        EditorUtility.SetDirty(toggle);
+                        StrangeToolkit.EditorSupport.SceneEdit.Commit(toggle);
                     }
                     EditorGUILayout.EndHorizontal();
                 }
@@ -472,7 +472,7 @@ namespace StrangeToolkit
                 Undo.DestroyObjectImmediate(backingBehaviour);
             }
 
-            EditorUtility.SetDirty(go);
+            StrangeToolkit.EditorSupport.SceneEdit.Commit(go);
         }
 
         private void DrawToggleColliderSection(StrangeToggle toggle)
@@ -617,7 +617,7 @@ namespace StrangeToolkit
                         newList.Add(obj);
                 }
                 toggle.toggleObjects = newList.ToArray();
-                EditorUtility.SetDirty(toggle);
+                StrangeToolkit.EditorSupport.SceneEdit.Commit(toggle);
             }
 
             // Destroy the canvas
@@ -804,7 +804,7 @@ namespace StrangeToolkit
             }
             newObjects[newObjects.Length - 1] = checkGO;
             toggle.toggleObjects = newObjects;
-            EditorUtility.SetDirty(toggle);
+            StrangeToolkit.EditorSupport.SceneEdit.Commit(toggle);
 
             Selection.activeGameObject = canvasGO;
             StrangeToolkitLogger.LogSuccess($"Created UI Toggle for '{toggle.gameObject.name}'");

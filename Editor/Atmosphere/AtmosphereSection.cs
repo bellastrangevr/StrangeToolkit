@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using UnityEditor.SceneManagement;
+using UnityEngine.SceneManagement;
 using VRC.SDKBase;
 using F = StrangeToolkit.AtmosphereFields;
 
@@ -10,13 +12,41 @@ namespace StrangeToolkit
     /// The World tab's Atmosphere section: edits StrangeHub's atmosphere presets, the Reference Camera's
     /// clipping, and previews presets in the editor. Owns its own state instead of sharing the window's.
     /// </summary>
-    internal class AtmosphereSection
+    internal class AtmosphereSection : System.IDisposable
     {
         private static readonly string[] FogModeLabels = { "Scene", "Linear (distance)", "Exponential", "Exponential Squared" };
 
         private bool _show = true;
         private VisualsSnapshot _previewSnapshot;
         private int _previewIndex = -1;
+        private StrangeHub _previewHub;
+        private bool _enabled;
+
+        public void Enable()
+        {
+            if (_enabled) return;
+            _enabled = true;
+            AssemblyReloadEvents.beforeAssemblyReload += Restore;
+            EditorSceneManager.sceneSaving += OnSceneSaving;
+            EditorSceneManager.sceneClosing += OnSceneClosing;
+            EditorApplication.playModeStateChanged += OnPlayMode;
+        }
+
+        public void Dispose()
+        {
+            Restore();
+            if (!_enabled) return;
+            _enabled = false;
+            AssemblyReloadEvents.beforeAssemblyReload -= Restore;
+            EditorSceneManager.sceneSaving -= OnSceneSaving;
+            EditorSceneManager.sceneClosing -= OnSceneClosing;
+            EditorApplication.playModeStateChanged -= OnPlayMode;
+        }
+
+        private void OnSceneSaving(Scene scene, string path) => Restore();
+        private void OnSceneClosing(Scene scene, bool removingScene) => Restore();
+        private void OnPlayMode(PlayModeStateChange change) { if (change == PlayModeStateChange.ExitingEditMode) Restore(); }
+        private void Restore() => RestorePreview(_previewHub);
 
         public void Draw(StrangeHub hub, GUIStyle foldoutStyle, GUIStyle listItemStyle)
         {
@@ -274,7 +304,7 @@ namespace StrangeToolkit
             near = AtmosphereMath.ClampNear(near);
             cam.nearClipPlane = near;
             cam.farClipPlane = AtmosphereMath.ClampFar(far, near);
-            EditorUtility.SetDirty(cam);
+            StrangeToolkit.EditorSupport.SceneEdit.Commit(cam);
         }
 
         private static void AssignReferenceCamera(SerializedObject descriptorSO, SerializedProperty referenceProp, GameObject cameraObject)
@@ -301,6 +331,8 @@ namespace StrangeToolkit
 
         private void Preview(StrangeHub hub, int index)
         {
+            if (_previewHub != null && _previewHub != hub) Restore();
+            _previewHub = hub;
             if (_previewSnapshot == null)
             {
                 _previewSnapshot = new VisualsSnapshot
@@ -337,6 +369,7 @@ namespace StrangeToolkit
             ApplySnapshot(_previewSnapshot);
             _previewSnapshot = null;
             _previewIndex = -1;
+            _previewHub = null;
             if (hub != null) hub.ResetBaseline();
             SceneView.RepaintAll();
             StrangeToolkitLogger.Log("Scene sky and fog restored.");

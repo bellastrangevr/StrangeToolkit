@@ -51,7 +51,7 @@ namespace StrangeToolkit
         {
             var t = GetPlayerType();
             if (t == null) return null;
-            return UnityEngine.Object.FindFirstObjectByType(t, FindObjectsInactive.Include) as Component;
+            return VideoPlayerContext.Find(t);
         }
 
         public static UnityEngine.Object[] FindAllInScene()
@@ -170,7 +170,7 @@ namespace StrangeToolkit
                 so.ApplyModifiedProperties();
             }
 
-            EditorUtility.SetDirty(syncPlayer);
+            StrangeToolkit.EditorSupport.SceneEdit.Commit(syncPlayer);
             return true;
         }
 
@@ -240,7 +240,7 @@ namespace StrangeToolkit
                 so.ApplyModifiedProperties();
             }
 
-            EditorUtility.SetDirty(sourceManager);
+            StrangeToolkit.EditorSupport.SceneEdit.Commit(sourceManager);
             return true;
         }
     }

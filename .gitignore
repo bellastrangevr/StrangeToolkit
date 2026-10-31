@@ -1,4 +1,6 @@
 RELEASE_INSTRUCTIONS.md
+.dev/
+__pycache__/
 
 # Wiki (separate repo)
 wiki/

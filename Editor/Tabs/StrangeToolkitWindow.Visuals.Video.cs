@@ -461,7 +461,7 @@ namespace StrangeToolkit
                     hubOk ? null : (System.Action)(() =>
                     {
                         var hubGO = new GameObject("StrangeHub");
-                        hubGO.AddComponent<UdonBehaviour>().gameObject.AddComponent<StrangeHub>();
+                        hubGO.AddComponent<StrangeHub>();
                         Undo.RegisterCreatedObjectUndo(hubGO, "Create StrangeHub");
                         _cachedHub = null;
                         _statusCacheDirty = true;
@@ -579,7 +579,7 @@ namespace StrangeToolkit
             if (hub == null)
             {
                 var hubGO = new GameObject("StrangeHub");
-                hub = hubGO.AddComponent<UdonBehaviour>().gameObject.AddComponent<StrangeHub>();
+                hub = hubGO.AddComponent<StrangeHub>();
                 Undo.RegisterCreatedObjectUndo(hubGO, "Create StrangeHub");
                 _cachedHub = null;
             }
@@ -588,7 +588,7 @@ namespace StrangeToolkit
             if (strangeVideo == null)
             {
                 var videoGO = new GameObject("StrangeVideo");
-                strangeVideo = videoGO.AddComponent<UdonBehaviour>().gameObject.AddComponent<StrangeVideo>();
+                strangeVideo = videoGO.AddComponent<StrangeVideo>();
                 Undo.RegisterCreatedObjectUndo(videoGO, "Create StrangeVideo");
             }
 
@@ -597,7 +597,7 @@ namespace StrangeToolkit
             strangeVideo.strangeHub = hub;
             // Built-in sync is only for the Unity player; third-party players in the scene sync themselves
             strangeVideo.useBuiltInSync = !VideoPlayerRegistry.All.Any(a => a.IsInstalled && a.FindInScene() != null);
-            EditorUtility.SetDirty(strangeVideo);
+            StrangeToolkit.EditorSupport.SceneEdit.Commit(strangeVideo);
             _statusCacheDirty = true;
             StrangeToolkitLogger.LogSuccess("StrangeVideo wiring fixed.");
         }

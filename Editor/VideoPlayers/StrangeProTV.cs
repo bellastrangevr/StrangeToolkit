@@ -44,7 +44,7 @@ namespace StrangeToolkit
         {
             var t = GetPlayerType();
             if (t == null) return null;
-            return UnityEngine.Object.FindFirstObjectByType(t, FindObjectsInactive.Include) as Component;
+            return VideoPlayerContext.Find(t);
         }
 
         public static UnityEngine.Object[] FindAllInScene()
@@ -75,7 +75,7 @@ namespace StrangeToolkit
         {
             var t = VideoPlayerUtil.FindTypeInAllAssemblies(MediaControlsTypeName);
             if (t == null) return null;
-            return UnityEngine.Object.FindFirstObjectByType(t, FindObjectsInactive.Include) as Component;
+            return VideoPlayerContext.Find(t);
         }
 
         public static bool RunBuildChecks()
@@ -106,7 +106,7 @@ namespace StrangeToolkit
             var tAdapter = VideoPlayerUtil.FindTypeInAllAssemblies(AudioAdapterTypeName);
             if (tAdapter == null) return false;
 
-            var adapter = UnityEngine.Object.FindFirstObjectByType(tAdapter) as Component;
+            var adapter = VideoPlayerContext.Find(tAdapter);
             if (adapter == null) return false;
 
             var so = new SerializedObject(adapter);

@@ -135,25 +135,37 @@ namespace StrangeToolkit
             IsImporting = true;
 
             var pkgUrl = string.Format(AVProTrialUrl, AVProTrialVersion);
-            var cacheFile = Application.temporaryCachePath + $"/UnityPlugin-AVProVideo-v{AVProTrialVersion}-Trial.unitypackage";
+            var cacheFile = Application.temporaryCachePath + $"/UnityPlugin-AVProVideo-{Guid.NewGuid():N}.unitypackage";
 
             StrangeToolkitLogger.Log($"Downloading AVPro Trial {AVProTrialVersion}...");
 
             var www = new UnityWebRequest(pkgUrl);
             www.downloadHandler = new DownloadHandlerFile(cacheFile);
-            var req = www.SendWebRequest();
+            UnityWebRequestAsyncOperation req;
+            try { req = www.SendWebRequest(); }
+            catch (Exception exception)
+            {
+                IsImporting = false;
+                www.Dispose();
+                StrangeToolkitLogger.LogError("Could not start the AVPro trial download: " + exception);
+                return;
+            }
             req.completed += op =>
             {
                 IsImporting = false;
 
-                if (!File.Exists(cacheFile))
+                try
                 {
-                    StrangeToolkitLogger.LogWarning("AVPro Trial download failed.");
-                    return;
+                    if (www.result != UnityWebRequest.Result.Success || !File.Exists(cacheFile) || new FileInfo(cacheFile).Length == 0)
+                    {
+                        StrangeToolkitLogger.LogError($"AVPro trial download failed ({www.responseCode}): {www.error}");
+                        if (File.Exists(cacheFile)) File.Delete(cacheFile);
+                        return;
+                    }
+                    AssetDatabase.ImportPackage(cacheFile, true);
+                    StrangeToolkitLogger.LogSuccess($"Downloaded AVPro Trial {AVProTrialVersion}; package import opened.");
                 }
-
-                StrangeToolkitLogger.LogSuccess($"AVPro Trial {AVProTrialVersion} downloaded. Importing...");
-                AssetDatabase.ImportPackage(cacheFile, true);
+                finally { www.Dispose(); }
             };
         }
     }

@@ -28,7 +28,7 @@ namespace StrangeToolkit.Repair
             public Entry(string guid, string relativePath) { Guid = guid; RelativePath = relativePath; }
         }
 
-        /// <summary>The package folder as Unity names it: "Assets/…" for a .unitypackage install, "Packages/…" for VCC.</summary>
+        /// <summary>The toolkit root: "Assets/..." for legacy imports, "Packages/..." for package installs.</summary>
         public string Root { get; private set; }
         public IReadOnlyList<Entry> Entries { get; private set; }
         public HashSet<string> Guids { get; private set; }
@@ -37,7 +37,8 @@ namespace StrangeToolkit.Repair
         public bool InAssets => Root == "Assets" || Root.StartsWith("Assets/");
 
         /// <summary>A git working copy: files missing from the list are new work, not leftovers, so nothing is deleted.</summary>
-        public bool IsDevelopmentCopy => Directory.Exists(Path.Combine(PhysicalPath(Root), ".git"));
+        public bool IsDevelopmentCopy => Directory.Exists(Path.Combine(PhysicalPath(Root), ".git")) ||
+            File.Exists(Path.Combine(PhysicalPath(Root), ".git"));
 
         public string AssetPath(Entry entry) => Root + "/" + entry.RelativePath;
 
@@ -84,15 +85,33 @@ namespace StrangeToolkit.Repair
 
         public static bool IsUnder(string path, string folder) => path == folder || path.StartsWith(folder + "/");
 
-        private static readonly Regex TypeDeclaration = new Regex(@"\b(?:class|struct|interface|enum)\s+([A-Za-z_]\w*)");
-
-        /// <summary>Names of the types a C# file declares (comments included; it only has to match the same file elsewhere).</summary>
-        public static HashSet<string> DeclaredTypes(string physicalPath)
+        public IEnumerable<string> UnlistedFiles()
         {
-            var names = new HashSet<string>();
-            if (!File.Exists(physicalPath)) return names;
-            foreach (Match m in TypeDeclaration.Matches(File.ReadAllText(physicalPath))) names.Add(m.Groups[1].Value);
-            return names;
+            var shipped = new HashSet<string>(RelativePaths, StringComparer.Ordinal);
+            foreach (string name in new[] { ListRelativePath, "package.json", "README.md", "LICENSE", "CHANGELOG.md" }) shipped.Add(name);
+            foreach (string name in shipped.ToArray())
+            {
+                shipped.Add(name + ".meta");
+                string parent = Path.GetDirectoryName(name);
+                while (!string.IsNullOrEmpty(parent))
+                {
+                    shipped.Add(parent.Replace('\\', '/') + ".meta");
+                    parent = Path.GetDirectoryName(parent);
+                }
+            }
+            string physicalRoot = PhysicalPath(Root);
+            if (!Directory.Exists(physicalRoot)) yield break;
+            foreach (string file in Directory.EnumerateFiles(physicalRoot, "*", SearchOption.AllDirectories))
+            {
+                string relative = file.Substring(physicalRoot.Length).Replace('\\', '/').TrimStart('/');
+                if (!shipped.Contains(relative)) yield return Root + "/" + relative;
+            }
+        }
+
+        public static bool SameSource(string first, string second)
+        {
+            if (!File.Exists(first) || !File.Exists(second)) return false;
+            return File.ReadAllText(first).Replace("\r\n", "\n") == File.ReadAllText(second).Replace("\r\n", "\n");
         }
 
         private static readonly Regex AsmdefName = new Regex("\"name\"\\s*:\\s*\"([^\"]+)\"");
@@ -112,6 +131,17 @@ namespace StrangeToolkit.Repair
             if (text.Contains("sourceCsScript:")) return "sourceCsScript:";
             if (text.Contains("sourceAssembly:")) return "sourceAssembly:";
             return null;
+        }
+
+        private static readonly Regex UdonSource = new Regex(
+            @"^[ \t]*(sourceCsScript|sourceAssembly):[^\r\n]*\bguid: *([0-9a-fA-F]{32})\b", RegexOptions.Multiline);
+
+        /// <summary>Identifies a Udon program by its source script or assembly, independently of its filename.</summary>
+        public static string UdonSharpSourceIdentity(string physicalPath)
+        {
+            if (!File.Exists(physicalPath)) return null;
+            var match = UdonSource.Match(File.ReadAllText(physicalPath));
+            return match.Success ? match.Groups[1].Value + ":" + match.Groups[2].Value.ToLowerInvariant() : null;
         }
 
         private static readonly Regex MetaGuid = new Regex(@"^guid: *(\w+)", RegexOptions.Multiline);

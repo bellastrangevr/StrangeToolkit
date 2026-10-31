@@ -21,7 +21,7 @@ namespace StrangeToolkit.Repair
         public FileProblemKind Kind;
         public string Path;     // the file the problem is about
         public string Target;   // Misplaced: where it belongs. WrongId: the GUID it should have. IdTaken: the asset holding it
-        public bool Fixable => Kind != FileProblemKind.IdTaken && Kind != FileProblemKind.Missing;
+        public bool Fixable => Kind != FileProblemKind.IdTaken && Kind != FileProblemKind.Missing && Kind != FileProblemKind.Leftover;
     }
 
     // ==================================================================================
@@ -38,7 +38,8 @@ namespace StrangeToolkit.Repair
         public static List<FileProblem> Scan(ToolkitFiles files)
         {
             var problems = new List<FileProblem>();
-            var duplicates = new HashSet<string>(FindDuplicates(files));
+            var programDuplicates = FindDuplicatePrograms(files).ToDictionary(p => p.Path, p => p.Target);
+            var duplicates = new HashSet<string>(FindDuplicates(files).Concat(programDuplicates.Keys));
             var leftovers = files.IsDevelopmentCopy ? new HashSet<string>() : new HashSet<string>(FindLeftovers(files));
 
             foreach (var entry in files.Entries)
@@ -70,7 +71,11 @@ namespace StrangeToolkit.Repair
             }
 
             problems.InsertRange(0, leftovers.OrderBy(p => p).Select(p => new FileProblem { Kind = FileProblemKind.Leftover, Path = p }));
-            problems.InsertRange(0, duplicates.OrderBy(p => p).Select(p => new FileProblem { Kind = FileProblemKind.Duplicate, Path = p }));
+            problems.InsertRange(0, duplicates.OrderBy(p => p).Select(p => new FileProblem
+            {
+                Kind = FileProblemKind.Duplicate, Path = p,
+                Target = programDuplicates.TryGetValue(p, out string target) ? target : null
+            }));
             problems.AddRange(UnlinkedPrograms(files).Select(u => new FileProblem { Kind = FileProblemKind.Unlinked, Path = u.program, Target = u.script }));
             return problems;
         }
@@ -78,12 +83,13 @@ namespace StrangeToolkit.Repair
         // Toolkit Udon programs whose script reference is empty, paired with the toolkit script of the same name
         private static IEnumerable<(string program, string script)> UnlinkedPrograms(ToolkitFiles files)
         {
-            foreach (string guid in AssetDatabase.FindAssets("t:UdonSharpProgramAsset", new[] { files.Root }))
+            foreach (var entry in files.Entries.Where(e => e.RelativePath.EndsWith(".asset")))
             {
-                string path = AssetDatabase.GUIDToAssetPath(guid);
+                string path = files.AssetPath(entry);
                 var program = AssetDatabase.LoadAssetAtPath<UdonSharp.UdonSharpProgramAsset>(path);
                 if (program == null || program.sourceCsScript != null) continue;
                 string script = Path.ChangeExtension(path, ".cs").Replace('\\', '/');
+                if (!files.RelativePaths.Contains(Path.ChangeExtension(entry.RelativePath, ".cs").Replace('\\', '/'))) continue;
                 if (AssetDatabase.LoadAssetAtPath<MonoScript>(script) != null) yield return (path, script);
             }
         }
@@ -96,7 +102,7 @@ namespace StrangeToolkit.Repair
             {
                 var program = AssetDatabase.LoadAssetAtPath<UdonSharp.UdonSharpProgramAsset>(programPath);
                 program.sourceCsScript = AssetDatabase.LoadAssetAtPath<MonoScript>(scriptPath);
-                EditorUtility.SetDirty(program);
+                StrangeToolkit.EditorSupport.SceneEdit.Commit(program);
                 count++;
             }
             if (count > 0)
@@ -127,20 +133,12 @@ namespace StrangeToolkit.Repair
                 list.Add(e);
             }
 
-            var typesCache = new Dictionary<string, HashSet<string>>();
-            HashSet<string> TypesOf(ToolkitFiles.Entry e)
-            {
-                if (!typesCache.TryGetValue(e.Guid, out var types))
-                    typesCache[e.Guid] = types = ToolkitFiles.DeclaredTypes(ToolkitFiles.PhysicalPath(files.AssetPath(e)));
-                return types;
-            }
-
             foreach (string path in AssetDatabase.FindAssets("t:MonoScript", new[] { "Assets" }).Select(AssetDatabase.GUIDToAssetPath).Distinct())
             {
                 if (ToolkitFiles.IsUnder(path, root) || !path.EndsWith(".cs")) continue;
                 if (!byName.TryGetValue(Path.GetFileName(path), out var candidates)) continue;
-                var types = ToolkitFiles.DeclaredTypes(ToolkitFiles.PhysicalPath(path));
-                if (candidates.Any(e => TypesOf(e).Overlaps(types))) yield return path;
+                if (candidates.Any(e => ToolkitFiles.SameSource(ToolkitFiles.PhysicalPath(path),
+                    ToolkitFiles.PhysicalPath(files.AssetPath(e))))) yield return path;
             }
 
             var ourAssemblies = new HashSet<string>(files.Entries
@@ -150,18 +148,42 @@ namespace StrangeToolkit.Repair
             foreach (string path in AssetDatabase.FindAssets("t:AssemblyDefinitionAsset", new[] { "Assets" }).Select(AssetDatabase.GUIDToAssetPath).Distinct())
             {
                 if (ToolkitFiles.IsUnder(path, root)) continue;
-                if (ourAssemblies.Contains(ToolkitFiles.AssemblyName(ToolkitFiles.PhysicalPath(path)))) yield return path;
+                if (ourAssemblies.Contains(ToolkitFiles.AssemblyName(ToolkitFiles.PhysicalPath(path))) &&
+                    files.Entries.Where(e => e.RelativePath.EndsWith(".asmdef")).Any(e =>
+                        ToolkitFiles.SameSource(ToolkitFiles.PhysicalPath(path), ToolkitFiles.PhysicalPath(files.AssetPath(e))))) yield return path;
             }
 
-            foreach (var e in files.Entries.Where(x => x.RelativePath.EndsWith(".asset")))
+        }
+
+        private static IEnumerable<FileProblem> FindDuplicatePrograms(ToolkitFiles files)
+        {
+            var bySource = new Dictionary<string, ToolkitFiles.Entry>();
+            foreach (var entry in files.Entries.Where(e => e.RelativePath.EndsWith(".asset")))
             {
-                string key = ToolkitFiles.UdonSharpAssetKey(ToolkitFiles.PhysicalPath(files.AssetPath(e)));
-                if (key == null) continue;
-                string name = Path.GetFileName(e.RelativePath);
-                foreach (string path in AssetDatabase.FindAssets(Path.GetFileNameWithoutExtension(name), new[] { "Assets" }).Select(AssetDatabase.GUIDToAssetPath).Distinct())
+                string identity = ToolkitFiles.UdonSharpSourceIdentity(ToolkitFiles.PhysicalPath(files.AssetPath(entry)));
+                if (identity != null) bySource[identity] = entry;
+            }
+
+            var candidates = AssetDatabase.FindAssets("t:UdonSharpProgramAsset", new[] { "Assets" })
+                .Concat(AssetDatabase.FindAssets("t:UdonSharpAssemblyDefinition", new[] { "Assets" }))
+                .Select(AssetDatabase.GUIDToAssetPath).Distinct();
+            foreach (string path in candidates)
+            {
+                if (ToolkitFiles.IsUnder(path, files.Root + "/Expansions")) continue;
+                string identity = ToolkitFiles.UdonSharpSourceIdentity(ToolkitFiles.PhysicalPath(path));
+                if (identity == null || !bySource.TryGetValue(identity, out var entry)) continue;
+                string canonical = files.AssetPath(entry);
+                if (path == canonical) continue;
+                yield return new FileProblem { Kind = FileProblemKind.Duplicate, Path = path, Target = canonical };
+
+                // UdonSharp names each generated program after its source program asset's GUID.
+                string duplicateGuid = ToolkitFiles.ReadMetaGuid(ToolkitFiles.PhysicalPath(path));
+                if (identity.StartsWith("sourceCsScript:") && duplicateGuid != null && duplicateGuid != entry.Guid)
                 {
-                    if (ToolkitFiles.IsUnder(path, root) || Path.GetFileName(path) != name) continue;
-                    if (ToolkitFiles.UdonSharpAssetKey(ToolkitFiles.PhysicalPath(path)) == key) yield return path;
+                    string compiled = "Assets/SerializedUdonPrograms/" + duplicateGuid + ".asset";
+                    if (File.Exists(ToolkitFiles.PhysicalPath(compiled)))
+                        yield return new FileProblem { Kind = FileProblemKind.Duplicate, Path = compiled,
+                            Target = "Assets/SerializedUdonPrograms/" + entry.Guid + ".asset" };
                 }
             }
         }
@@ -193,8 +215,30 @@ namespace StrangeToolkit.Repair
 
             // 1. Delete duplicates and leftovers first: they may hold the GUIDs the real files need back
             string[] delete = problems
-                .Where(p => p.Kind == FileProblemKind.Duplicate || (p.Kind == FileProblemKind.Leftover && !files.IsDevelopmentCopy))
+                .Where(p => p.Kind == FileProblemKind.Duplicate)
                 .Select(p => p.Path).Distinct().ToArray();
+            // Program assets may still be used by saved scenes, prefabs or custom assets. Keep those until rewired.
+            var guarded = new HashSet<string>(delete);
+            var deleting = new HashSet<string>(delete);
+            var referenced = new HashSet<string>();
+            if (guarded.Count > 0)
+            {
+                var dependencyRoots = AssetDatabase.GetAllAssetPaths()
+                    .Where(p => (p.StartsWith("Assets/") || p.StartsWith("Packages/")) &&
+                                !deleting.Contains(p) && !AssetDatabase.IsValidFolder(p)).ToArray();
+                referenced.UnionWith(AssetDatabase.GetDependencies(dependencyRoots, true).Where(guarded.Contains));
+                // Saved-asset dependencies do not include references added to an unsaved scene.
+                var loadedSceneObjects = UnityEngine.Resources.FindObjectsOfTypeAll<UnityEngine.GameObject>()
+                    .Where(go => go.scene.IsValid()).Cast<UnityEngine.Object>().ToArray();
+                foreach (var dependency in EditorUtility.CollectDependencies(loadedSceneObjects))
+                {
+                    string path = AssetDatabase.GetAssetPath(dependency);
+                    if (guarded.Contains(path)) referenced.Add(path);
+                }
+                foreach (string path in referenced)
+                    failures.Add("Kept referenced copy " + path + ". Repair Components can reassign Udon programs; other asset references must be reassigned before this copy can be removed.");
+                delete = delete.Where(p => !referenced.Contains(p)).ToArray();
+            }
             if (delete.Length > 0)
             {
                 var failed = new List<string>();

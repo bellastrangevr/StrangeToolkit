@@ -42,7 +42,7 @@ namespace StrangeToolkit
         {
             var t = GetPlayerType();
             if (t == null) return null;
-            return UnityEngine.Object.FindFirstObjectByType(t, FindObjectsInactive.Include) as Component;
+            return VideoPlayerContext.Find(t);
         }
 
         public static UnityEngine.Object[] FindAllInScene()
@@ -63,7 +63,7 @@ namespace StrangeToolkit
         {
             var t = VideoPlayerUtil.FindTypeInAllAssemblies(FrontendHandlerTypeName);
             if (t == null) return null;
-            return UnityEngine.Object.FindFirstObjectByType(t, FindObjectsInactive.Include) as Component;
+            return VideoPlayerContext.Find(t);
         }
 
         /// <summary>
@@ -104,7 +104,7 @@ namespace StrangeToolkit
             var yttlType = VideoPlayerUtil.FindTypeInAllAssemblies(YttlManagerTypeName);
             Component existing = null;
             if (yttlType != null)
-                existing = UnityEngine.Object.FindFirstObjectByType(yttlType, FindObjectsInactive.Include) as Component;
+                existing = VideoPlayerContext.Find(yttlType);
 
             if (existing != null)
             {

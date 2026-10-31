@@ -336,7 +336,7 @@ public class StrangeToggleEditor : Editor
                     newList.Add(obj);
             }
             toggle.toggleObjects = newList.ToArray();
-            EditorUtility.SetDirty(toggle);
+            StrangeToolkit.EditorSupport.SceneEdit.Commit(toggle);
         }
 
         // Destroy the canvas

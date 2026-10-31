@@ -3,6 +3,8 @@ using UnityEditor;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Globalization;
+using UnityEngine.SceneManagement;
 
 namespace StrangeToolkit
 {
@@ -51,11 +53,12 @@ namespace StrangeToolkit
             public long totalAudioBytes = 0;
         }
 
-        private static readonly string buildLogPath = Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "Unity", "Editor", "Editor.log");
+        private static readonly string buildLogPath = Application.consoleLogPath;
         private static readonly char[] delimiterChars = { ' ', '\t' };
 
         // Cache to avoid re-reading the log file on every scan
         private static BuildData _cachedBuildData;
+        private static string _cachedScenePath;
         private static System.DateTime _cachedLogModTime;
 
         /// <summary>
@@ -64,6 +67,9 @@ namespace StrangeToolkit
         /// </summary>
         public static BuildData ReadBuildLog()
         {
+            var scene = SceneManager.GetActiveScene();
+            string scenePath = scene.path;
+            if (scene.isDirty || string.IsNullOrEmpty(scenePath)) return null;
             if (!File.Exists(buildLogPath))
             {
                 StrangeToolkitLogger.LogWarning("Could not find Unity Editor log file.");
@@ -72,15 +78,17 @@ namespace StrangeToolkit
 
             // Check if we can use cached data
             System.DateTime currentModTime = File.GetLastWriteTime(buildLogPath);
-            if (_cachedBuildData != null && currentModTime == _cachedLogModTime)
+            if (_cachedBuildData != null && _cachedScenePath == scenePath && currentModTime == _cachedLogModTime)
             {
                 return _cachedBuildData;
             }
 
-            string tempPath = buildLogPath + "_strange_copy";
+            string tempPath = Path.Combine("Library", "StrangeToolkit", "Logs", System.Guid.NewGuid().ToString("N") + ".log");
             try
             {
-                FileUtil.ReplaceFile(buildLogPath, tempPath);
+                Directory.CreateDirectory(Path.GetDirectoryName(tempPath));
+                using (var input = new FileStream(buildLogPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                using (var output = File.Create(tempPath)) input.CopyTo(output);
             }
             catch (System.Exception e)
             {
@@ -89,6 +97,7 @@ namespace StrangeToolkit
             }
 
             BuildData data = null;
+            bool sceneIncluded = false;
 
             try
             {
@@ -102,6 +111,7 @@ namespace StrangeToolkit
                         if (line.Contains("scene-") && line.Contains(".vrcw"))
                         {
                             data = new BuildData { isFromBuild = true };
+                            sceneIncluded = false;
 
                             line = reader.ReadLine();
 
@@ -142,7 +152,7 @@ namespace StrangeToolkit
 
                                         // Parse percentage
                                         info.percent = splitLine[2];
-                                        float.TryParse(splitLine[2].TrimEnd('%'), out info.percentValue);
+                                        float.TryParse(splitLine[2].TrimEnd('%'), NumberStyles.Float, CultureInfo.InvariantCulture, out info.percentValue);
 
                                         // Parse path
                                         info.path = splitLine[3];
@@ -151,8 +161,10 @@ namespace StrangeToolkit
                                             info.path += " " + splitLine[i];
                                         }
 
+                                        if (string.Equals(info.path, scenePath, System.StringComparison.OrdinalIgnoreCase)) sceneIncluded = true;
+
                                         // Categorize by extension
-                                        string ext = Path.GetExtension(info.path).ToLower();
+                                        string ext = Path.GetExtension(info.path).ToLowerInvariant();
 
                                         // Texture files (explicit parentheses for clarity)
                                         if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tga" ||
@@ -208,6 +220,9 @@ namespace StrangeToolkit
                 }
             }
 
+            // Logs without a scene identity cannot safely describe the current world.
+            if (!sceneIncluded) data = null;
+            _cachedScenePath = scenePath;
             // Cache the result
             _cachedBuildData = data;
             _cachedLogModTime = currentModTime;
@@ -225,11 +240,11 @@ namespace StrangeToolkit
 
         private static float ParseSizeToBytes(string sizeStr)
         {
-            string[] parts = sizeStr.ToLower().Split(' ');
+            string[] parts = sizeStr.ToLowerInvariant().Split(' ');
             if (parts.Length < 2) return 0;
 
             float value;
-            if (!float.TryParse(parts[0], out value)) return 0;
+            if (!float.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out value)) return 0;
 
             string unit = parts[1].Trim();
 

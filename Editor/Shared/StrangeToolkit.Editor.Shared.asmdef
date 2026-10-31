@@ -1,0 +1,7 @@
+{
+    "name": "StrangeToolkit.Editor.Shared",
+    "rootNamespace": "StrangeToolkit.EditorSupport",
+    "references": [],
+    "includePlatforms": ["Editor"],
+    "autoReferenced": true
+}

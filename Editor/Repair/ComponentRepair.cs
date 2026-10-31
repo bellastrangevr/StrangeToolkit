@@ -39,8 +39,8 @@ namespace StrangeToolkit.Repair
     // components. "Toolkit" means a script or UdonSharp program asset inside the toolkit folder.
     //
     // Missing scripts are handled in the scene or prefab file, because Unity gives no object for them: the file names the
-    // script GUID and the saved field names. A missing script whose GUID Unity no longer knows is matched to a toolkit
-    // script by those field names and only re-linked when one script clearly matches. If UdonSharp already rebuilt the
+    // script GUID. Only a known toolkit GUID or a canonical inventory identity can establish ownership.
+    // Unknown scripts are left alone. If UdonSharp already rebuilt the
     // script from its Udon behaviour's data (it does on load), the missing copy is a duplicate and is removed instead.
     public sealed class ComponentRepair
     {
@@ -49,7 +49,7 @@ namespace StrangeToolkit.Repair
         private readonly HashSet<MonoScript> _scripts = new HashSet<MonoScript>();
         private readonly HashSet<UdonSharpProgramAsset> _programs = new HashSet<UdonSharpProgramAsset>();
         private readonly HashSet<string> _guids;
-        private readonly Dictionary<MonoScript, HashSet<string>> _fields = new Dictionary<MonoScript, HashSet<string>>();
+        private readonly Dictionary<string, MonoScript> _knownScripts = new Dictionary<string, MonoScript>(StringComparer.OrdinalIgnoreCase);
 
         public readonly List<ComponentNote> Notes = new List<ComponentNote>();
         public int Changes { get; private set; }
@@ -73,21 +73,28 @@ namespace StrangeToolkit.Repair
             _mode = mode;
             _guids = new HashSet<string>(files.Guids);
 
-            foreach (string guid in AssetDatabase.FindAssets("t:MonoScript", new[] { files.Root }))
+            foreach (var entry in files.Entries.Where(e => e.RelativePath.EndsWith(".cs")))
             {
-                var script = AssetDatabase.LoadAssetAtPath<MonoScript>(AssetDatabase.GUIDToAssetPath(guid));
+                string path = files.AssetPath(entry);
+                var script = AssetDatabase.LoadAssetAtPath<MonoScript>(path);
                 if (script == null) continue;
                 _scripts.Add(script);
-                _guids.Add(guid);
-                var type = script.GetClass();
-                if (type != null && typeof(Component).IsAssignableFrom(type)) _fields[script] = SerializedFieldNames(type);
+                _knownScripts[entry.Guid] = script;
+                string guid = AssetDatabase.AssetPathToGUID(path);
+                if (!string.IsNullOrEmpty(guid))
+                {
+                    _guids.Add(guid);
+                    _knownScripts[guid] = script;
+                }
             }
-            foreach (string guid in AssetDatabase.FindAssets("t:UdonSharpProgramAsset", new[] { files.Root }))
+            foreach (var entry in files.Entries.Where(e => e.RelativePath.EndsWith(".asset")))
             {
-                var program = AssetDatabase.LoadAssetAtPath<UdonSharpProgramAsset>(AssetDatabase.GUIDToAssetPath(guid));
+                string path = files.AssetPath(entry);
+                var program = AssetDatabase.LoadAssetAtPath<UdonSharpProgramAsset>(path);
                 if (program == null) continue;
                 _programs.Add(program);
-                _guids.Add(guid);
+                string guid = AssetDatabase.AssetPathToGUID(path);
+                if (!string.IsNullOrEmpty(guid)) _guids.Add(guid);
             }
         }
 
@@ -129,7 +136,8 @@ namespace StrangeToolkit.Repair
             if (rewrote) ReloadOpenScenes();
 
             loaded = Enumerable.Range(0, SceneManager.sceneCount).Select(SceneManager.GetSceneAt).Where(s => s.isLoaded).ToList();
-            foreach (var scene in loaded) RunScene(scene, save: _mode == ComponentMode.Uninstall);
+            foreach (var scene in loaded) RunScene(scene, save: _mode != ComponentMode.Check &&
+                (_mode == ComponentMode.Uninstall || scope == RepairScope.WholeProject));
 
             if (scope != RepairScope.WholeProject) return;
 
@@ -169,6 +177,11 @@ namespace StrangeToolkit.Repair
         {
             Begin(scene.path, isAsset: false);
             if (string.IsNullOrEmpty(_where)) _where = scene.name;
+            if (save && scene.isDirty)
+            {
+                Note("Save this scene first; repair did not overwrite its pending changes.", null, true);
+                return;
+            }
             foreach (var go in scene.GetRootGameObjects())
             foreach (var t in go.GetComponentsInChildren<Transform>(true))
                 RunGameObject(t.gameObject);
@@ -176,7 +189,8 @@ namespace StrangeToolkit.Repair
 
             if (!_changed) return;
             EditorSceneManager.MarkSceneDirty(scene);
-            if (save && !string.IsNullOrEmpty(scene.path)) EditorSceneManager.SaveScene(scene);
+            if (save && (string.IsNullOrEmpty(scene.path) || !EditorSceneManager.SaveScene(scene)))
+                Note("Could not save repaired scene: " + scene.name, null, true);
         }
 
         private static void ReloadOpenScenes()
@@ -230,7 +244,6 @@ namespace StrangeToolkit.Repair
             public string Text;
             public long Id, GameObjectId;
             public string Guid;
-            public HashSet<string> Keys;
             public MonoScript Match;            // the toolkit script it was, when known
             public bool LiveTwin;               // the same GameObject already has a working copy of that script
         }
@@ -240,7 +253,6 @@ namespace StrangeToolkit.Repair
         private static readonly Regex BlockHeader = new Regex(@"^--- !u!(\d+) &(-?\d+)(.*)$", RegexOptions.Multiline);
         private static readonly Regex ScriptGuid = new Regex(@"m_Script: \{fileID: -?\d+, guid: (\w+)");
         private static readonly Regex GameObjectRef = new Regex(@"^  m_GameObject: \{fileID: (-?\d+)\}", RegexOptions.Multiline);
-        private static readonly Regex TopLevelKey = new Regex(@"^  ([A-Za-z_]\w*):", RegexOptions.Multiline);
 
         // MonoBehaviour blocks whose script is gone (GUID unknown to Unity) or is a toolkit script that doesn't compile
         private List<MissingBlock> MissingBlocks(string text)
@@ -261,8 +273,6 @@ namespace StrangeToolkit.Repair
                     Start = h.Index, Length = end - h.Index, Text = blockText,
                     Id = long.Parse(h.Groups[2].Value), GameObjectId = long.Parse(gm.Groups[1].Value),
                     Guid = sm.Groups[1].Value,
-                    Keys = new HashSet<string>(TopLevelKey.Matches(blockText).Cast<Match>().Select(x => x.Groups[1].Value)
-                        .Where(k => !k.StartsWith("m_") && !k.StartsWith("_udonSharp") && k != "serializationData")),
                 });
             }
 
@@ -279,8 +289,7 @@ namespace StrangeToolkit.Repair
                     missing.Add(b);
                     continue;
                 }
-                b.Match = MatchByFields(b.Keys);
-                if (b.Match == null) continue;
+                if (!_knownScripts.TryGetValue(b.Guid, out b.Match)) continue;
                 string matchGuid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(b.Match));
                 b.LiveTwin = all.Any(o => o != b && o.GameObjectId == b.GameObjectId && o.Guid == matchGuid);
                 missing.Add(b);
@@ -308,7 +317,7 @@ namespace StrangeToolkit.Repair
             _where = path;
             if (_mode == ComponentMode.Check)
             {
-                foreach (var b in relinks) Note($"A missing script looks like {b.Match.name}; Repair will re-link it.", null, true);
+                foreach (var b in relinks) Note($"A known missing toolkit script matches {b.Match.name}; Repair will re-link it.", null, true);
                 return false;
             }
 
@@ -364,7 +373,8 @@ namespace StrangeToolkit.Repair
                 hasOurs = true;
                 if (proxy.GetType().Name == "StrangeHub") _hubs.Add(proxy);
 
-                var program = UdonSharpEditorUtility.GetUdonSharpProgramAsset(proxy);
+                var script = MonoScript.FromMonoBehaviour(proxy);
+                var program = _programs.FirstOrDefault(p => p != null && p.sourceCsScript == script);
                 var backing = UdonSharpEditorUtility.GetBackingUdonBehaviour(proxy);
                 if (backing != null && backing.gameObject == go) backings.Add(backing);
 
@@ -519,34 +529,5 @@ namespace StrangeToolkit.Repair
         private void Note(string text, Object ping, bool problem) =>
             Notes.Add(new ComponentNote { Where = _where, Text = text, Ping = ping, Problem = problem });
 
-        private MonoScript MatchByFields(HashSet<string> keys)
-        {
-            if (keys == null || keys.Count == 0) return null;
-            MonoScript best = null;
-            double bestScore = 0, second = 0;
-            foreach (var pair in _fields)
-            {
-                if (pair.Value.Count == 0) continue;
-                int shared = pair.Value.Count(keys.Contains);
-                double score = (double)shared / (pair.Value.Count + keys.Count - shared);
-                if (score > bestScore) { second = bestScore; bestScore = score; best = pair.Key; }
-                else if (score > second) second = score;
-            }
-            return bestScore >= 0.6 && bestScore > second ? best : null;
-        }
-
-        private static HashSet<string> SerializedFieldNames(Type type)
-        {
-            var names = new HashSet<string>();
-            for (var t = type; t != null && t != typeof(MonoBehaviour) && t != typeof(UdonSharpBehaviour) && t != typeof(Component); t = t.BaseType)
-            {
-                foreach (var f in t.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
-                {
-                    if (f.IsNotSerialized) continue;
-                    if (f.IsPublic || f.IsDefined(typeof(SerializeField), true)) names.Add(f.Name);
-                }
-            }
-            return names;
-        }
     }
 }

@@ -12,6 +12,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: vpm-listing
+  cancel-in-progress: false
+
 env:
   packageName: "com.bellastrangevr.strangetoolkit"
 
@@ -30,15 +34,17 @@ jobs:
             const fs = require('fs');
 
             // Get all releases
-            const releases = await github.rest.repos.listReleases({
+            const releases = await github.paginate(github.rest.repos.listReleases, {
               owner: context.repo.owner,
-              repo: context.repo.repo
+              repo: context.repo.repo,
+              per_page: 100
             });
 
             // Build versions object
             const versions = {};
 
-            for (const release of releases.data) {
+            for (const release of releases) {
+              if (release.draft) continue;
               const packageJsonAsset = release.assets.find(asset => asset.name === 'package.json');
               if (packageJsonAsset) {
                 const assetData = await github.rest.repos.getReleaseAsset({

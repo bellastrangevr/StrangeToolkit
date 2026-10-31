@@ -205,7 +205,7 @@ namespace StrangeToolkit
                                 entry.obj.isStatic = true;
                                 GameObjectUtility.SetStaticEditorFlags(entry.obj, allStaticFlags);
                             }
-                            EditorUtility.SetDirty(entry.obj);
+                            StrangeToolkit.EditorSupport.SceneEdit.Commit(entry.obj);
                             RunExtendedScan(); // Rescan GPU instancing and other inter-dependent auditors
                         }
                         GUI.backgroundColor = Color.white;
@@ -276,7 +276,7 @@ namespace StrangeToolkit
                 {
                     Undo.RecordObject(entry.obj, "Fix Broken Static");
                     entry.obj.isStatic = false;
-                    EditorUtility.SetDirty(entry.obj);
+                    StrangeToolkit.EditorSupport.SceneEdit.Commit(entry.obj);
                     _brokenStaticObjects.RemoveAt(i); // Remove from list immediately
                 }
                 GUI.backgroundColor = Color.white;
@@ -445,7 +445,7 @@ namespace StrangeToolkit
             foreach (var l in lightsArray)
             {
                 l.lightmapBakeType = LightmapBakeType.Baked;
-                EditorUtility.SetDirty(l);
+                StrangeToolkit.EditorSupport.SceneEdit.Commit(l);
             }
             StrangeToolkitLogger.LogSuccess($"Set {count} light(s) to Baked mode");
             RunAuditorScan();
@@ -467,7 +467,7 @@ namespace StrangeToolkit
                 if (go == null) continue;
                 go.isStatic = true;
                 GameObjectUtility.SetStaticEditorFlags(go, allStaticFlags);
-                EditorUtility.SetDirty(go);
+                StrangeToolkit.EditorSupport.SceneEdit.Commit(go);
             }
 
             StrangeToolkitLogger.LogSuccess($"Set {safeObjects.Length} object(s) to Static");
@@ -489,7 +489,7 @@ namespace StrangeToolkit
                 if (go == null) continue;
                 go.isStatic = false;
                 GameObjectUtility.SetStaticEditorFlags(go, 0);
-                EditorUtility.SetDirty(go);
+                StrangeToolkit.EditorSupport.SceneEdit.Commit(go);
             }
             StrangeToolkitLogger.LogSuccess($"Set {safeObjects.Length} object(s) to Not Static");
             RunAuditorScan();
@@ -508,7 +508,7 @@ namespace StrangeToolkit
                 var go = brokenObjects[i];
                 if (go == null) continue;
                 go.isStatic = false;
-                EditorUtility.SetDirty(go);
+                StrangeToolkit.EditorSupport.SceneEdit.Commit(go);
                 _brokenStaticObjects.RemoveAt(i);
             }
             StrangeToolkitLogger.LogSuccess($"Set {count} object(s) to Dynamic (removed Static flag)");
@@ -695,7 +695,7 @@ namespace StrangeToolkit
         private void ChangeTextureSize(TextureImporter importer, int newSize)
         {
             importer.maxTextureSize = newSize;
-            TextureImporterPlatformSettings settings = importer.GetPlatformTextureSettings("PC");
+            TextureImporterPlatformSettings settings = importer.GetPlatformTextureSettings("Standalone");
             settings.maxTextureSize = newSize;
             importer.SetPlatformTextureSettings(settings);
             importer.SaveAndReimport();
@@ -706,7 +706,7 @@ namespace StrangeToolkit
         {
             importer.SetPlatformTextureSettings(new TextureImporterPlatformSettings()
             {
-                name = "PC",
+                name = "Standalone",
                 overridden = format != TextureImporterFormat.Automatic,
                 format = format,
                 maxTextureSize = importer.maxTextureSize,

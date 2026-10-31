@@ -61,7 +61,7 @@ jobs:
         if: ${{ steps.checkReleaseTag.outputs.exists == 'false' }}
         run: |
           mkdir -p ${{env.packagePath}}
-          rsync -r --exclude="Packages" --exclude=".git" --exclude=".github" --exclude="docs" ./ "${{ env.packagePath }}"/
+          rsync -r --exclude="Packages" --exclude=".git" --exclude=".github" --exclude=".dev" --exclude="docs" ./ "${{ env.packagePath }}"/
 
       - name: Create Zip
         if: ${{ steps.checkReleaseTag.outputs.exists == 'false' }}
@@ -75,33 +75,7 @@ jobs:
       - name: Create UnityPackage
         if: ${{ steps.checkReleaseTag.outputs.exists == 'false' }}
         run: |
-          cd "${{ env.packagePath }}"
-          # Create unitypackage structure
-          mkdir -p ../unitypackage_build
-
-          # Process each file and create the unitypackage tar structure
-          find . -type f ! -name "*.meta" ! -path "./.git/*" | while read file; do
-            # Get the meta file path
-            metafile="${file}.meta"
-            if [ -f "$metafile" ]; then
-              # Extract GUID from meta file
-              guid=$(grep "guid:" "$metafile" | head -1 | awk '{print $2}')
-              if [ -n "$guid" ]; then
-                mkdir -p "../unitypackage_build/$guid"
-                # Create pathname file with Assets path
-                echo "Assets/${{ env.packageName }}/${file#./}" > "../unitypackage_build/$guid/pathname"
-                # Copy the asset
-                cp "$file" "../unitypackage_build/$guid/asset"
-                # Copy the meta file
-                cp "$metafile" "../unitypackage_build/$guid/asset.meta"
-              fi
-            fi
-          done
-
-          cd ../unitypackage_build
-          tar -cvf "../../${{ env.packageFileName }}.unitypackage" ./*
-          cd ../..
-          rm -rf Packages/unitypackage_build
+          python3 .github/scripts/build-unitypackage.py "${{ env.zipFile }}" "${{ env.packageFileName }}.unitypackage"
 
       - name: Extract Changelog
         if: ${{ steps.checkReleaseTag.outputs.exists == 'false' }}

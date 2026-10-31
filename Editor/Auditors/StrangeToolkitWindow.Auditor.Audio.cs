@@ -22,11 +22,10 @@ namespace StrangeToolkit
                 {
                     List<string> reasons = new List<string>();
 
-                    var settings = importer.defaultSampleSettings;
+                    var settings = importer.GetOverrideSampleSettings(_auditProfile == AuditProfile.Quest ? "Android" : "Standalone");
 
                     if (_auditProfile == AuditProfile.Quest)
                     {
-                        if (!importer.forceToMono) reasons.Add("Stereo");
                         if (settings.compressionFormat != AudioCompressionFormat.ADPCM && settings.compressionFormat != AudioCompressionFormat.Vorbis)
                             reasons.Add("Uncompressed");
                     }
@@ -44,8 +43,6 @@ namespace StrangeToolkit
                         long estimatedBytes = 0;
                         if (settings.compressionFormat == AudioCompressionFormat.PCM)
                             estimatedBytes += (long)(src.clip.length * src.clip.frequency * src.clip.channels * 2);
-                        if (!importer.forceToMono && src.clip.channels == 2)
-                            estimatedBytes += (long)(src.clip.length * src.clip.frequency * 2);
 
                         _audioIssues.Add(new AudioIssue
                         {
@@ -156,7 +153,7 @@ namespace StrangeToolkit
         private void OptimizeAudioClips(List<AudioClip> clips)
         {
             if (clips == null || clips.Count == 0) return;
-
+            int optimized = 0;
             foreach (var clip in clips)
             {
                 string path = AssetDatabase.GetAssetPath(clip);
@@ -165,20 +162,25 @@ namespace StrangeToolkit
                 {
                     Undo.RecordObject(importer, "Optimize Audio");
 
-                    importer.forceToMono = true;
 
-                    AudioImporterSampleSettings settings = importer.defaultSampleSettings;
+                    AudioImporterSampleSettings settings = importer.GetOverrideSampleSettings(_auditProfile == AuditProfile.Quest ? "Android" : "Standalone");
                     settings.loadType = clip.length > 10f ? AudioClipLoadType.Streaming : AudioClipLoadType.DecompressOnLoad;
                     settings.compressionFormat = clip.length > 5f ? AudioCompressionFormat.Vorbis : AudioCompressionFormat.ADPCM;
                     settings.quality = 0.7f;
 
-                    importer.defaultSampleSettings = settings;
+                    string platform = _auditProfile == AuditProfile.Quest ? "Android" : "Standalone";
+                    if (!importer.SetOverrideSampleSettings(platform, settings))
+                    {
+                        StrangeToolkitLogger.LogError("Could not apply " + platform + " audio settings to " + path);
+                        continue;
+                    }
                     importer.SaveAndReimport();
+                    optimized++;
                 }
             }
 
             RunExtendedScan();
-            StrangeToolkitLogger.LogSuccess($"Optimized {clips.Count} audio clips.");
+            StrangeToolkitLogger.Log($"Optimized {optimized} of {clips.Count} audio clips.");
         }
     }
 }

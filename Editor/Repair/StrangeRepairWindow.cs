@@ -44,7 +44,7 @@ namespace StrangeToolkit.Repair
             _scroll = EditorGUILayout.BeginScrollView(_scroll);
 
             EditorGUILayout.LabelField("Strange Toolkit Repair", EditorStyles.boldLabel);
-            EditorGUILayout.LabelField(_files.InAssets ? "Installed from a .unitypackage at" : "Installed by the Creator Companion at",
+            EditorGUILayout.LabelField(_files.InAssets ? "Installed in Assets at" : "Installed as a package at",
                 _files.Root, EditorStyles.wordWrappedMiniLabel);
             if (_files.IsDevelopmentCopy)
                 EditorGUILayout.HelpBox("This is a development copy (a git folder): leftover files are not deleted and Uninstall won't delete the toolkit's files.", MessageType.Info);
@@ -104,7 +104,7 @@ namespace StrangeToolkit.Repair
 
         private bool ConfirmFileFix()
         {
-            int delete = _fileProblems.Count(p => p.Kind == FileProblemKind.Duplicate || p.Kind == FileProblemKind.Leftover);
+            int delete = _fileProblems.Count(p => p.Kind == FileProblemKind.Duplicate);
             int move = _fileProblems.Count(p => p.Kind == FileProblemKind.Misplaced);
             int relink = _fileProblems.Count(p => p.Kind == FileProblemKind.WrongId);
             int programs = _fileProblems.Count(p => p.Kind == FileProblemKind.Unlinked);
@@ -119,7 +119,7 @@ namespace StrangeToolkit.Repair
             switch (kind)
             {
                 case FileProblemKind.Duplicate: return "Duplicate copies (will be deleted)";
-                case FileProblemKind.Leftover: return "Leftovers from an older version (will be deleted)";
+                case FileProblemKind.Leftover: return "Unlisted files (kept for manual review)";
                 case FileProblemKind.Misplaced: return "Moved out of the toolkit (will be moved back)";
                 case FileProblemKind.WrongId: return "ID changed by Unity (will be restored)";
                 case FileProblemKind.IdTaken: return "ID used by another asset (can't fix here)";
@@ -132,6 +132,7 @@ namespace StrangeToolkit.Repair
         {
             switch (p.Kind)
             {
+                case FileProblemKind.Duplicate: return p.Target == null ? null : "canonical: " + p.Target;
                 case FileProblemKind.Misplaced: return "→ " + p.Target;
                 case FileProblemKind.IdTaken: return "held by " + p.Target;
                 default: return null;
@@ -219,16 +220,17 @@ namespace StrangeToolkit.Repair
         {
             var scope = _uninstallOpenScenesOnly ? RepairScope.OpenScenes : RepairScope.WholeProject;
             bool deleteFiles = _files.InAssets && !_files.IsDevelopmentCopy;
-            var expansions = Directory.Exists(ToolkitFiles.PhysicalPath(_files.Root + "/Expansions"))
-                ? Directory.GetDirectories(ToolkitFiles.PhysicalPath(_files.Root + "/Expansions")).Select(Path.GetFileName).ToArray()
-                : new string[0];
+            var customFiles = _files.IsDevelopmentCopy ? new List<string>() : _files.UnlistedFiles().ToList();
+            bool keepCustomFiles = customFiles.Count > 0;
 
             string message = (scope == RepairScope.WholeProject
                                  ? "Every scene and prefab in Assets that uses Strange Toolkit is opened, cleaned and saved."
                                  : "The open scenes are cleaned and saved.") +
                              "\n\nOnly Strange Toolkit components are removed. GameObjects stay." +
-                             (deleteFiles ? $"\n\nThen the toolkit folder is deleted:\n{_files.Root}" : "") +
-                             (deleteFiles && expansions.Length > 0 ? $"\nIncluding its expansions: {string.Join(", ", expansions)}" : "");
+                             (deleteFiles ? keepCustomFiles
+                                 ? "\n\nShipped toolkit files are removed. Unlisted custom files and their components are kept."
+                                 : $"\n\nThen the toolkit folder is deleted:\n{_files.Root}" : "") +
+                             (keepCustomFiles ? "\n\nCustom files found:\n" + string.Join("\n", customFiles.Take(10)) : "");
             if (!EditorUtility.DisplayDialog("Uninstall Strange Toolkit?", message, "Uninstall", "Cancel")) return;
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
 
@@ -248,23 +250,32 @@ namespace StrangeToolkit.Repair
                 return;
             }
 
+            customFiles = _files.IsDevelopmentCopy ? new List<string>() : _files.UnlistedFiles().ToList();
+            keepCustomFiles = customFiles.Count > 0;
             string leftovers = userAssets.Count > 0
                 ? "\n\nThese assets of yours use toolkit scripts and will show as missing scripts; delete them if you don't need them:\n" + string.Join("\n", userAssets.Take(10))
                 : "";
+            if (keepCustomFiles)
+                leftovers += "\n\nCustom files and components were preserved. Before removing this package or folder manually, move those files with their metadata into your own Assets folder:\n" +
+                    string.Join("\n", customFiles.Take(10));
 
             if (!deleteFiles)
             {
                 EditorUtility.DisplayDialog("Strange Toolkit", _files.IsDevelopmentCopy
                     ? "Components removed. This is a development copy, so its files were left in place." + leftovers
-                    : "Components removed and scenes saved.\n\nNow remove the package in the VRChat Creator Companion " +
-                      "(Manage Project, then the minus next to Strange Toolkit). Deleting the folder by hand brings it back." + leftovers, "OK");
+                    : "Components removed and scenes saved.\n\nIf Creator Companion manages this package, remove it there " +
+                      "(Manage Project, then the minus next to Strange Toolkit).\n\nFor a manual .unitypackage installation, close Unity and remove the folder:\n" +
+                      _files.Root + leftovers, "OK");
                 return;
             }
 
             var failed = new List<string>();
-            AssetDatabase.DeleteAssets(programFiles.Append(_files.Root).ToArray(), failed);
+            var removeFiles = keepCustomFiles
+                ? _files.Entries.Select(_files.AssetPath).Where(path => File.Exists(ToolkitFiles.PhysicalPath(path)))
+                : new[] { _files.Root };
+            AssetDatabase.DeleteAssets(programFiles.Concat(removeFiles).Distinct().ToArray(), failed);
             if (failed.Count > 0) Debug.LogWarning("[Strange Toolkit] Couldn't delete:\n" + string.Join("\n", failed));
-            EditorUtility.DisplayDialog("Strange Toolkit", "Strange Toolkit is uninstalled." + leftovers, "OK");
+            EditorUtility.DisplayDialog("Strange Toolkit", (failed.Count == 0 ? "Shipped Strange Toolkit files were removed." : "Some toolkit files could not be removed; see the Console.") + leftovers, "OK");
             Close();
             AssetDatabase.Refresh();
         }

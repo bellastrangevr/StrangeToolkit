@@ -141,7 +141,7 @@ namespace StrangeToolkit
             foreach (var m in mats)
             {
                 m.shader = s;
-                EditorUtility.SetDirty(m);
+                StrangeToolkit.EditorSupport.SceneEdit.Commit(m);
             }
 
             StrangeToolkitLogger.LogSuccess($"Swapped shaders on {mats.Count} materials.");

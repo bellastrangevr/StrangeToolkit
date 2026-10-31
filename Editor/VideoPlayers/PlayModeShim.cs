@@ -178,14 +178,16 @@ namespace StrangeToolkit
         {
             sourceUrl = url.Get();
             autoplayAfterResolve = false;
-            StartResolveURLCoroutine(url, maximumResolution, backingPlayer, UrlResolved, UrlFailed);
+            if (StartResolveURLCoroutine != null) StartResolveURLCoroutine(url, maximumResolution, backingPlayer, UrlResolved, UrlFailed);
+            else UrlResolved(sourceUrl);
         }
 
         public void PlayURL(VRCUrl url)
         {
             sourceUrl = url.Get();
             autoplayAfterResolve = true;
-            StartResolveURLCoroutine(url, maximumResolution, backingPlayer, UrlResolved, UrlFailed);
+            if (StartResolveURLCoroutine != null) StartResolveURLCoroutine(url, maximumResolution, backingPlayer, UrlResolved, UrlFailed);
+            else UrlResolved(sourceUrl);
         }
 
         public void Play() => backingPlayer.Play();

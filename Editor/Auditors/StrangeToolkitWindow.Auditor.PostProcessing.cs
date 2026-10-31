@@ -26,7 +26,7 @@ namespace StrangeToolkit
                 System.Type ppVolType = System.Type.GetType("UnityEngine.Rendering.PostProcessing.PostProcessVolume, Unity.Postprocessing.Runtime");
                 if (ppVolType != null)
                 {
-                    var ppVols = FindObjectsByType(ppVolType, FindObjectsSortMode.None) as Component[];
+                    var ppVols = FindObjectsByType(ppVolType, FindObjectsSortMode.None).OfType<Component>().ToArray();
                     if (ppVols != null)
                     {
                         foreach (var c in ppVols)
@@ -132,13 +132,15 @@ namespace StrangeToolkit
         {
             if (volumes == null || volumes.Count == 0) return;
 
-            Undo.RecordObjects(volumes.Select(v => v.gameObject).ToArray(), "Disable Volumes");
-            foreach (var v in volumes)
+            var behaviours = volumes.OfType<Behaviour>().ToArray();
+            Undo.RecordObjects(behaviours, "Disable Volumes");
+            foreach (var volume in behaviours)
             {
-                if (v != null) v.gameObject.SetActive(false);
+                volume.enabled = false;
+                StrangeToolkit.EditorSupport.SceneEdit.Commit(volume);
             }
 
-            StrangeToolkitLogger.LogSuccess($"Disabled {volumes.Count} post processing volumes.");
+            StrangeToolkitLogger.LogSuccess($"Disabled {behaviours.Length} post processing volumes.");
             RunExtendedScan();
         }
     }

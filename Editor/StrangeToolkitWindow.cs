@@ -132,6 +132,8 @@ namespace StrangeToolkit
 
         private void OnEnable()
         {
+            _atmosphereSection.Enable();
+            RestoreInstancingSnapshots();
             SimpleScan();
             _expansionsNeedRescan = true;
             EditorSceneManager.sceneOpened += OnSceneOpened;
@@ -141,6 +143,7 @@ namespace StrangeToolkit
 
         private void OnDisable()
         {
+            _atmosphereSection.Dispose();
             EditorSceneManager.sceneOpened -= OnSceneOpened;
             EditorSceneManager.sceneClosed -= OnSceneClosed;
             EditorApplication.projectChanged -= OnProjectChanged;

@@ -5,7 +5,8 @@
         "UdonSharp.Runtime",
         "UdonSharp.Editor",
         "VRC.Udon",
-        "VRC.Udon.Editor"
+        "VRC.Udon.Editor",
+        "StrangeToolkit.Editor.Shared"
     ],
     "includePlatforms": [
         "Editor"

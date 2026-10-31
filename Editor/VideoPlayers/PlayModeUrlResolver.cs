@@ -25,8 +25,14 @@ namespace StrangeToolkit
     internal static class PlayModeUrlResolver
     {
         private static string _ytdlPath = "";
-        private static readonly HashSet<System.Diagnostics.Process> RunningProcesses = new HashSet<System.Diagnostics.Process>();
-        private static readonly HashSet<MonoBehaviour> RegisteredBehaviours = new HashSet<MonoBehaviour>();
+        private sealed class Resolution
+        {
+            public VideoUrlProcess Process;
+            public UnityEngine.Object Player;
+            public Action<string> Success;
+            public Action<VideoError> Error;
+        }
+        private static readonly List<Resolution> Resolutions = new List<Resolution>();
         private static readonly Regex YtdlPattern = new Regex(".*(?:youtube|yt)-dl.*\\.exe");
 
         internal const string YtdlPathPrefKey = "StrangeToolkit-YTDL-PATH";
@@ -45,7 +51,7 @@ namespace StrangeToolkit
         static void SetupURLResolveCallback()
         {
             _ytdlPath = GetYTDLExecutablePath();
-            if (!string.IsNullOrEmpty(_ytdlPath)) SetupCallbacks();
+            SetupCallbacks();
         }
 
         private static string GetYTDLExecutablePath()
@@ -89,7 +95,7 @@ namespace StrangeToolkit
 #endif
 
             // Hunt via PATH
-            var ytdlHunt = new System.Diagnostics.Process();
+            using var ytdlHunt = new System.Diagnostics.Process();
             ytdlHunt.StartInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
             ytdlHunt.StartInfo.CreateNoWindow = true;
             ytdlHunt.StartInfo.UseShellExecute = false;
@@ -117,10 +123,9 @@ namespace StrangeToolkit
             try
             {
                 ytdlHunt.Start();
-                ytdlHunt.WaitForExit(5000);
-                var stdout = ytdlHunt.StandardOutput;
-                List<string> lines = new List<string>();
-                while (!stdout.EndOfStream) lines.Add(stdout.ReadLine());
+                var output = ytdlHunt.StandardOutput.ReadToEndAsync();
+                if (!ytdlHunt.WaitForExit(5000)) { ytdlHunt.Kill(); return ""; }
+                var lines = output.GetAwaiter().GetResult().Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).ToList();
 
                 string resolved = "";
                 foreach (var possible in PossibleExecutableNames)
@@ -155,6 +160,12 @@ namespace StrangeToolkit
 #if AVPRO_IMPORTED && !STRANGE_DISABLE_AVPRO
             StrangeAVProPlayer.StartResolveURLCoroutine = ResolveURLCallback;
 #endif
+            EditorApplication.update -= PollResolutions;
+            EditorApplication.update += PollResolutions;
+            EditorApplication.quitting -= CancelResolutions;
+            EditorApplication.quitting += CancelResolutions;
+            AssemblyReloadEvents.beforeAssemblyReload -= CancelResolutions;
+            AssemblyReloadEvents.beforeAssemblyReload += CancelResolutions;
             EditorApplication.playModeStateChanged -= PlayModeChanged;
             EditorApplication.playModeStateChanged += PlayModeChanged;
         }
@@ -186,18 +197,70 @@ namespace StrangeToolkit
 
         private static void PlayModeChanged(PlayModeStateChange change)
         {
-            if (change == PlayModeStateChange.ExitingPlayMode)
-            {
-                foreach (var process in RunningProcesses.Where(process => !process.HasExited))
-                {
-                    process.Close();
-                }
-                RunningProcesses.Clear();
+            if (change == PlayModeStateChange.ExitingPlayMode) CancelResolutions();
+        }
 
-                foreach (MonoBehaviour behaviour in RegisteredBehaviours)
-                    behaviour.StopAllCoroutines();
-                RegisteredBehaviours.Clear();
+        private static void CancelResolutions()
+        {
+            foreach (var resolution in Resolutions.ToArray())
+            {
+                try { resolution.Process.Dispose(); }
+                catch (Exception exception) { Debug.LogWarning("[Strange Video] Process cleanup failed: " + exception); }
             }
+            Resolutions.Clear();
+        }
+
+        private static void PollResolutions()
+        {
+            foreach (var resolution in Resolutions.ToArray())
+            {
+                bool finished = false;
+                try
+                {
+                    if (resolution.Player != null && !resolution.Process.TimedOut && !resolution.Process.Completed) continue;
+                    Resolutions.Remove(resolution);
+                    finished = true;
+                    if (resolution.Player == null) continue;
+                    if (resolution.Process.TimedOut)
+                    {
+                        Debug.LogWarning("[Strange Video] URL resolution timed out.");
+                        NotifyResolution(resolution, null, VideoError.PlayerError);
+                        continue;
+                    }
+                    string resolved = resolution.Process.Output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                        .FirstOrDefault(line => Uri.TryCreate(line, UriKind.Absolute, out var uri) &&
+                            (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp));
+                    if (resolution.Process.ExitCode != 0 || string.IsNullOrEmpty(resolved))
+                    {
+                        Debug.LogWarning("[Strange Video] URL resolution failed: " + resolution.Process.Errors);
+                        NotifyResolution(resolution, null, VideoError.InvalidURL);
+                    }
+                    else NotifyResolution(resolution, resolved, null);
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogError("[Strange Video] URL resolution failed: " + exception);
+                    Resolutions.Remove(resolution);
+                    finished = true;
+                    if (resolution.Player != null) NotifyResolution(resolution, null, VideoError.PlayerError);
+                }
+                finally
+                {
+                    if (finished)
+                        try { resolution.Process.Dispose(); }
+                        catch (Exception exception) { Debug.LogWarning("[Strange Video] Process cleanup failed: " + exception); }
+                }
+            }
+        }
+
+        private static void NotifyResolution(Resolution resolution, string url, VideoError? error)
+        {
+            try
+            {
+                if (error.HasValue) resolution.Error(error.Value);
+                else resolution.Success(url);
+            }
+            catch (Exception exception) { Debug.LogError("[Strange Video] Video callback failed: " + exception); }
         }
 
         static void ResolveURLCallback(VRCUrl url, int resolution, UnityEngine.Object videoPlayer, Action<string> urlResolvedCallback, Action<VideoError> errorCallback)
@@ -227,76 +290,33 @@ namespace StrangeToolkit
                 return;
             }
 
-            var ytdlProcess = new System.Diagnostics.Process();
-            ytdlProcess.StartInfo.WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden;
-            ytdlProcess.StartInfo.CreateNoWindow = true;
-            ytdlProcess.StartInfo.UseShellExecute = false;
-            ytdlProcess.StartInfo.RedirectStandardOutput = true;
-            ytdlProcess.StartInfo.RedirectStandardError = true;
-            ytdlProcess.StartInfo.FileName = _ytdlPath;
-            // "--" ends option parsing so the URL can only ever be read as a URL
-            ytdlProcess.StartInfo.Arguments = $"--no-cache-dir --rm-cache-dir -f \"mp4[height<=?{resolution}]/best[height<=?{resolution}]\" --get-url -- \"{safeUrl}\"";
-
-            Debug.Log($"[<color=#9C6994>Strange Video</color>] Resolving URL '{safeUrl}'");
-
-            ytdlProcess.Start();
-            RunningProcesses.Add(ytdlProcess);
-
-            ((MonoBehaviour)videoPlayer).StartCoroutine(URLResolveCoroutine(safeUrl, ytdlProcess, videoPlayer, urlResolvedCallback, errorCallback));
-            RegisteredBehaviours.Add((MonoBehaviour)videoPlayer);
-        }
-
-        private const string ErrorText = "ERROR:";
-
-        static IEnumerator URLResolveCoroutine(string originalUrl, System.Diagnostics.Process ytdlProcess, UnityEngine.Object videoPlayer, Action<string> urlResolvedCallback, Action<VideoError> errorCallback)
-        {
-            if (!originalUrl.StartsWith("https://"))
+            if (string.IsNullOrEmpty(_ytdlPath))
             {
-                urlResolvedCallback(originalUrl);
-                yield break;
+                urlResolvedCallback(safeUrl);
+                return;
             }
-
-            while (!ytdlProcess.HasExited)
-                yield return new WaitForSeconds(0.1f);
-
-            RunningProcesses.Remove(ytdlProcess);
-
-            var stdout = ytdlProcess.StandardOutput;
-            var stderr = ytdlProcess.StandardError;
-            string line = "";
-            bool foundError = false;
-
-            while (!stderr.EndOfStream)
+            var start = new System.Diagnostics.ProcessStartInfo
             {
-                line = stderr.ReadLine();
-                if (string.IsNullOrWhiteSpace(line)) continue;
-                foundError = line.StartsWith(ErrorText);
-                if (foundError) break;
+                WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
+                CreateNoWindow = true,
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                FileName = _ytdlPath,
+                Arguments = $"--ignore-config --no-playlist --no-cache-dir -f \"mp4[height<=?{Math.Max(1, resolution)}]/best[height<=?{Math.Max(1, resolution)}]\" --get-url -- \"{safeUrl}\""
+            };
+            try
+            {
+                Resolutions.Add(new Resolution
+                {
+                    Process = new VideoUrlProcess(start), Player = videoPlayer,
+                    Success = urlResolvedCallback, Error = errorCallback
+                });
             }
-
-            if (foundError)
+            catch (Exception exception)
             {
-                Debug.LogError($"[<color=#9C6994>Strange Video</color>] {line.Substring(ErrorText.Length)}");
+                Debug.LogError("[Strange Video] Could not start URL resolver: " + exception);
                 errorCallback(VideoError.PlayerError);
-                yield break;
-            }
-
-            while (!foundError && !stdout.EndOfStream)
-            {
-                line = stdout.ReadLine();
-                if (string.IsNullOrWhiteSpace(line)) continue;
-                if (line.StartsWith("https://")) break;
-            }
-
-            if (!string.IsNullOrWhiteSpace(line))
-            {
-                Debug.Log($"[<color=#9C6994>Strange Video</color>] '{originalUrl}' resolved to '{line}'");
-                urlResolvedCallback(line);
-            }
-            else
-            {
-                Debug.LogError($"[<color=#9C6994>Strange Video</color>] Failed to resolve URL '{originalUrl}'.");
-                errorCallback(VideoError.InvalidURL);
             }
         }
     }

@@ -7,6 +7,27 @@ namespace StrangeToolkit
 {
     public partial class StrangeToolkitWindow
     {
+        private readonly Dictionary<GameObject, StaticEditorFlags> _staticBeforeInstancing = new Dictionary<GameObject, StaticEditorFlags>();
+        [System.Serializable]
+        private class StaticFlagSnapshot
+        {
+            public GameObject target;
+            public StaticEditorFlags flags;
+        }
+        [SerializeField] private List<StaticFlagSnapshot> _staticFlagSnapshots = new List<StaticFlagSnapshot>();
+
+        private void RestoreInstancingSnapshots()
+        {
+            _staticBeforeInstancing.Clear();
+            _staticFlagSnapshots.RemoveAll(snapshot => snapshot.target == null);
+            foreach (var snapshot in _staticFlagSnapshots)
+            {
+                _staticBeforeInstancing[snapshot.target] = snapshot.flags;
+                _persistentMarkedObjects.Add(snapshot.target);
+                _instancingAnalysis.markedForInstancing.Add(snapshot.target);
+            }
+        }
+
         // === SELECTION METHODS ===
 
         private void SetAllReadyGroupCandidatesSelection(bool selected)
@@ -115,7 +136,7 @@ namespace StrangeToolkit
         {
             Undo.RecordObject(mat, "Enable GPU Instancing");
             mat.enableInstancing = true;
-            EditorUtility.SetDirty(mat);
+            StrangeToolkit.EditorSupport.SceneEdit.Commit(mat);
             StrangeToolkitLogger.LogSuccess($"Enabled GPU instancing on {mat.name}");
         }
 
@@ -123,7 +144,7 @@ namespace StrangeToolkit
         {
             Undo.RecordObject(mat, "Disable GPU Instancing");
             mat.enableInstancing = false;
-            EditorUtility.SetDirty(mat);
+            StrangeToolkit.EditorSupport.SceneEdit.Commit(mat);
             StrangeToolkitLogger.Log($"Disabled GPU instancing on {mat.name}");
         }
 
@@ -145,7 +166,7 @@ namespace StrangeToolkit
             foreach (var mat in materials)
             {
                 mat.enableInstancing = true;
-                EditorUtility.SetDirty(mat);
+                StrangeToolkit.EditorSupport.SceneEdit.Commit(mat);
             }
             StrangeToolkitLogger.LogSuccess($"Enabled GPU instancing on {materials.Length} materials.");
             RunExtendedScan();
@@ -169,7 +190,7 @@ namespace StrangeToolkit
             foreach (var mat in materials)
             {
                 mat.enableInstancing = true;
-                EditorUtility.SetDirty(mat);
+                StrangeToolkit.EditorSupport.SceneEdit.Commit(mat);
             }
             StrangeToolkitLogger.LogSuccess($"Enabled GPU instancing on {materials.Length} materials.");
             RunExtendedScan();
@@ -193,7 +214,7 @@ namespace StrangeToolkit
             foreach (var mat in materials)
             {
                 mat.enableInstancing = true;
-                EditorUtility.SetDirty(mat);
+                StrangeToolkit.EditorSupport.SceneEdit.Commit(mat);
             }
             StrangeToolkitLogger.LogSuccess($"Enabled GPU instancing on {materials.Length} materials.");
             RunExtendedScan();
@@ -210,20 +231,24 @@ namespace StrangeToolkit
             candidate.wasStatic = candidate.gameObject.isStatic;
             candidate.hadStaticFlags = true;
 
-            // Clear all static flags
-            candidate.gameObject.isStatic = false;
-            GameObjectUtility.SetStaticEditorFlags(candidate.gameObject, 0);
+            // Preserve lighting, navigation, occlusion and other static flags.
+            if (!_staticBeforeInstancing.ContainsKey(candidate.gameObject))
+            {
+                _staticBeforeInstancing.Add(candidate.gameObject, candidate.originalStaticFlags);
+                _staticFlagSnapshots.Add(new StaticFlagSnapshot { target = candidate.gameObject, flags = candidate.originalStaticFlags });
+            }
+            GameObjectUtility.SetStaticEditorFlags(candidate.gameObject, candidate.originalStaticFlags & ~StaticEditorFlags.BatchingStatic);
 
             candidate.isStaticBatched = false;
             candidate.isMarkedForInstancing = true;
             _instancingAnalysis.markedForInstancing.Add(candidate.gameObject);
-            EditorUtility.SetDirty(candidate.gameObject);
+            StrangeToolkit.EditorSupport.SceneEdit.Commit(candidate.gameObject);
             StrangeToolkitLogger.LogSuccess($"Switched {candidate.gameObject.name} to instancing mode.");
         }
 
         private void RevertToStatic(InstancingCandidate candidate)
         {
-            if (!candidate.hadStaticFlags)
+            if (!_staticBeforeInstancing.TryGetValue(candidate.gameObject, out var originalFlags))
             {
                 StrangeToolkitLogger.Log($"{candidate.gameObject.name} has no saved static state to revert to.");
                 return;
@@ -232,15 +257,16 @@ namespace StrangeToolkit
             Undo.RecordObject(candidate.gameObject, "Revert to Static");
 
             // Restore original state
-            candidate.gameObject.isStatic = candidate.wasStatic;
-            GameObjectUtility.SetStaticEditorFlags(candidate.gameObject, candidate.originalStaticFlags);
+            GameObjectUtility.SetStaticEditorFlags(candidate.gameObject, originalFlags);
+            _staticBeforeInstancing.Remove(candidate.gameObject);
+            _staticFlagSnapshots.RemoveAll(snapshot => snapshot.target == candidate.gameObject);
 
-            candidate.isStaticBatched = true;
+            candidate.isStaticBatched = (originalFlags & StaticEditorFlags.BatchingStatic) != 0;
             candidate.isMarkedForInstancing = false;
             _instancingAnalysis.markedForInstancing.Remove(candidate.gameObject);
             candidate.hadStaticFlags = false; // Clear saved state
 
-            EditorUtility.SetDirty(candidate.gameObject);
+            StrangeToolkit.EditorSupport.SceneEdit.Commit(candidate.gameObject);
             StrangeToolkitLogger.LogSuccess($"Reverted {candidate.gameObject.name} to original static state.");
         }
 
@@ -298,13 +324,14 @@ namespace StrangeToolkit
                 for (int i = 0; i < materials.Length; i++)
                 {
                     // Replace any material from this consolidation group with the master
-                    if (group.instanceGroups.Any(g => g.material == materials[i]))
+                    if (materials[i] != null && !IsMaterialBlacklisted(materials[i]) &&
+                        group.instanceGroups.Any(g => g.material == materials[i]))
                     {
                         materials[i] = masterMaterial;
                     }
                 }
                 renderer.sharedMaterials = materials;
-                EditorUtility.SetDirty(renderer);
+                StrangeToolkit.EditorSupport.SceneEdit.Commit(renderer);
             }
 
             StrangeToolkitLogger.LogSuccess($"Consolidated {renderersToChange.Count} renderers to use '{masterMaterial.name}'.");

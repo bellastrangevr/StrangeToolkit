@@ -95,16 +95,34 @@ namespace StrangeToolkit
                 return;
             }
 
-            var so = new SerializedObject(audioLink);
-            so.FindProperty("audioSource").objectReferenceValue = audioSource;
-            so.ApplyModifiedProperties();
+            if (TryAssignAudioSources(audioLink, audioSource))
+                StrangeToolkitLogger.LogSuccess("Assigned video player's AudioSource to AudioLink.");
+        }
 
-            StrangeToolkitLogger.LogSuccess("Assigned video player's AudioSource to AudioLink.");
+        public static bool TryAssignAudioSources(Component audioLink, AudioSource main, AudioSource right = null)
+        {
+            if (audioLink == null || main == null) return false;
+            using var so = right != null
+                ? EditorSupport.SerializedSchema.TryCreate(audioLink, "audioSource", "optionalRightAudioSource")
+                : EditorSupport.SerializedSchema.TryCreate(audioLink, "audioSource");
+            if (so == null) return false;
+            so.Update();
+            so.FindProperty("audioSource").objectReferenceValue = main;
+            var optionalRight = so.FindProperty("optionalRightAudioSource");
+            if (optionalRight != null) optionalRight.objectReferenceValue = right;
+            so.ApplyModifiedProperties();
+            return true;
         }
 
         public static void DrawAudioLinkSettings(Component audioLink, ref bool showAdvanced)
         {
-            var so = new SerializedObject(audioLink);
+            using var so = EditorSupport.SerializedSchema.TryCreate(audioLink, "gain", "bass", "treble", "x0", "x1", "x2", "x3",
+                "threshold0", "threshold1", "threshold2", "threshold3", "fadeLength", "fadeExpFalloff");
+            if (so == null)
+            {
+                EditorGUILayout.HelpBox("This AudioLink version does not match these settings. See the Console for missing fields.", MessageType.Warning);
+                return;
+            }
 
             EditorGUILayout.PropertyField(so.FindProperty("gain"), new GUIContent("Gain"));
             EditorGUILayout.PropertyField(so.FindProperty("bass"), new GUIContent("Bass"));

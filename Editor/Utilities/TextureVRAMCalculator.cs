@@ -1,230 +1,90 @@
-using UnityEngine;
+using System;
 using UnityEditor;
-using System.Collections.Generic;
+using UnityEngine;
+using UnityEngine.Experimental.Rendering;
 using UnityEngine.Profiling;
+using UnityEngine.Rendering;
 
 namespace StrangeToolkit
 {
-    /// <summary>
-    /// Utility class for calculating texture VRAM usage.
-    /// Based on bits-per-pixel calculations for accurate size estimation.
-    /// </summary>
     public static class TextureVRAMCalculator
     {
-        // Bits per pixel for each texture format
-        private static readonly Dictionary<TextureFormat, float> BPP = new Dictionary<TextureFormat, float>()
-        {
-            { TextureFormat.Alpha8, 8 },
-            { TextureFormat.ARGB4444, 16 },
-            { TextureFormat.RGB24, 24 },
-            { TextureFormat.RGBA32, 32 },
-            { TextureFormat.ARGB32, 32 },
-            { TextureFormat.RGB565, 16 },
-            { TextureFormat.R16, 16 },
-            { TextureFormat.DXT1, 4 },
-            { TextureFormat.DXT5, 8 },
-            { TextureFormat.RGBA4444, 16 },
-            { TextureFormat.BGRA32, 32 },
-            { TextureFormat.RHalf, 16 },
-            { TextureFormat.RGHalf, 32 },
-            { TextureFormat.RGBAHalf, 64 },
-            { TextureFormat.RFloat, 32 },
-            { TextureFormat.RGFloat, 64 },
-            { TextureFormat.RGBAFloat, 128 },
-            { TextureFormat.YUY2, 16 },
-            { TextureFormat.RGB9e5Float, 32 },
-            { TextureFormat.BC6H, 8 },
-            { TextureFormat.BC7, 8 },
-            { TextureFormat.BC4, 4 },
-            { TextureFormat.BC5, 8 },
-            { TextureFormat.DXT1Crunched, 4 },
-            { TextureFormat.DXT5Crunched, 8 },
-            { TextureFormat.PVRTC_RGB2, 2 },
-            { TextureFormat.PVRTC_RGBA2, 2 },
-            { TextureFormat.PVRTC_RGB4, 4 },
-            { TextureFormat.PVRTC_RGBA4, 4 },
-            { TextureFormat.ETC_RGB4, 4 },
-            { TextureFormat.EAC_R, 4 },
-            { TextureFormat.EAC_R_SIGNED, 4 },
-            { TextureFormat.EAC_RG, 8 },
-            { TextureFormat.EAC_RG_SIGNED, 8 },
-            { TextureFormat.ETC2_RGB, 4 },
-            { TextureFormat.ETC2_RGBA1, 4 },
-            { TextureFormat.ETC2_RGBA8, 8 },
-            { TextureFormat.ASTC_4x4, 8 },
-            { TextureFormat.ASTC_5x5, 5.12f },
-            { TextureFormat.ASTC_6x6, 3.56f },
-            { TextureFormat.ASTC_8x8, 2 },
-            { TextureFormat.ASTC_10x10, 1.28f },
-            { TextureFormat.ASTC_12x12, 0.89f },
-            { TextureFormat.RG16, 16 },
-            { TextureFormat.R8, 8 },
-            { TextureFormat.ETC_RGB4Crunched, 4 },
-            { TextureFormat.ETC2_RGBA8Crunched, 8 },
-            { TextureFormat.ASTC_HDR_4x4, 8 },
-            { TextureFormat.ASTC_HDR_5x5, 5.12f },
-            { TextureFormat.ASTC_HDR_6x6, 3.56f },
-            { TextureFormat.ASTC_HDR_8x8, 2 },
-            { TextureFormat.ASTC_HDR_10x10, 1.28f },
-            { TextureFormat.ASTC_HDR_12x12, 0.89f },
-            { TextureFormat.RG32, 32 },
-            { TextureFormat.RGB48, 48 },
-            { TextureFormat.RGBA64, 64 },
-        };
-
-        private static readonly Dictionary<RenderTextureFormat, float> RT_BPP = new Dictionary<RenderTextureFormat, float>()
-        {
-            { RenderTextureFormat.ARGB32, 32 },
-            { RenderTextureFormat.Depth, 0 },
-            { RenderTextureFormat.ARGBHalf, 64 },
-            { RenderTextureFormat.Shadowmap, 8 },
-            { RenderTextureFormat.RGB565, 16 },
-            { RenderTextureFormat.ARGB4444, 16 },
-            { RenderTextureFormat.ARGB1555, 16 },
-            { RenderTextureFormat.Default, 32 },
-            { RenderTextureFormat.ARGB2101010, 32 },
-            { RenderTextureFormat.DefaultHDR, 64 },
-            { RenderTextureFormat.ARGB64, 64 },
-            { RenderTextureFormat.ARGBFloat, 128 },
-            { RenderTextureFormat.RGFloat, 64 },
-            { RenderTextureFormat.RGHalf, 32 },
-            { RenderTextureFormat.RFloat, 32 },
-            { RenderTextureFormat.RHalf, 16 },
-            { RenderTextureFormat.R8, 8 },
-            { RenderTextureFormat.ARGBInt, 128 },
-            { RenderTextureFormat.RGInt, 64 },
-            { RenderTextureFormat.RInt, 32 },
-            { RenderTextureFormat.BGRA32, 32 },
-            { RenderTextureFormat.RGB111110Float, 32 },
-            { RenderTextureFormat.RG32, 32 },
-            { RenderTextureFormat.RGBAUShort, 64 },
-            { RenderTextureFormat.RG16, 16 },
-            { RenderTextureFormat.R16, 16 },
-        };
-
-        /// <summary>
-        /// Calculate the VRAM size of a texture in bytes.
-        /// </summary>
         public static long CalculateTextureSize(Texture texture)
         {
             if (texture == null) return 0;
-
-            if (texture is Texture2D tex2D)
+            var format = texture.graphicsFormat;
+            if (texture is RenderTexture rt)
             {
-                if (!BPP.TryGetValue(tex2D.format, out float bpp))
-                    bpp = 32; // Default to RGBA32 if unknown
-                return CalculateSizeWithMipmaps(texture, bpp);
+                if (rt.dimension == TextureDimension.CubeArray) return Profiler.GetRuntimeMemorySizeLong(rt);
+                int layers = rt.dimension == TextureDimension.Cube ? 6 : Math.Max(1, rt.volumeDepth);
+                bool volume = rt.dimension == TextureDimension.Tex3D;
+                int mipCount = rt.useMipMap ? Math.Max(1, rt.mipmapCount) : 1;
+                long color = MipChain(rt.width, rt.height, layers, volume, mipCount, format);
+                int samples = Math.Max(1, rt.antiAliasing);
+                if (samples > 1)
+                {
+                    long multisampled = Plane(rt.width, rt.height, format) * layers * samples;
+                    color = multisampled + (rt.bindTextureMS ? 0 : color);
+                }
+                long depth = Plane(rt.width, rt.height, rt.depthStencilFormat) * layers * samples;
+                return color + depth;
             }
-            else if (texture is Texture2DArray tex2DArray)
-            {
-                if (!BPP.TryGetValue(tex2DArray.format, out float bpp))
-                    bpp = 32;
-                return CalculateSizeWithMipmaps(texture, bpp) * tex2DArray.depth;
-            }
-            else if (texture is Cubemap cubemap)
-            {
-                if (!BPP.TryGetValue(cubemap.format, out float bpp))
-                    bpp = 32;
-                return CalculateSizeWithMipmaps(texture, bpp) * 6; // 6 faces
-            }
-            else if (texture is CubemapArray cubemapArray)
-            {
-                if (!BPP.TryGetValue(cubemapArray.format, out float bpp))
-                    bpp = 32;
-                return CalculateSizeWithMipmaps(texture, bpp) * 6 * cubemapArray.cubemapCount; // 6 faces per cubemap
-            }
-            else if (texture is RenderTexture rt)
-            {
-                if (!RT_BPP.TryGetValue(rt.format, out float bpp))
-                    bpp = 32;
-                bpp += rt.depth; // Add depth buffer bits
-                return CalculateRenderTextureSize(rt, bpp);
-            }
-
-            // Fallback to Unity's profiler for unknown types
-            return Profiler.GetRuntimeMemorySizeLong(texture);
+            if (format == GraphicsFormat.None) return Profiler.GetRuntimeMemorySizeLong(texture);
+            int count = texture is Cubemap ? 6 : texture is CubemapArray cubes ? cubes.cubemapCount * 6
+                : texture is Texture2DArray array ? array.depth : texture is Texture3D volumeTexture ? volumeTexture.depth : 1;
+            return MipChain(texture.width, texture.height, count, texture is Texture3D, texture.mipmapCount, format);
         }
 
-        /// <summary>
-        /// Get texture format information.
-        /// </summary>
-        public static (string format, bool isCompressed) GetTextureFormatInfo(Texture texture)
+        private static long MipChain(int width, int height, int layers, bool volume, int mips, GraphicsFormat format)
         {
-            if (texture is Texture2D tex2D)
-            {
-                TextureFormat format = tex2D.format;
-                bool isCompressed = format != TextureFormat.RGBA32 &&
-                                   format != TextureFormat.RGB24 &&
-                                   format != TextureFormat.ARGB32 &&
-                                   format != TextureFormat.BGRA32;
-                return (format.ToString(), isCompressed);
-            }
-            else if (texture is RenderTexture rt)
-            {
-                return (rt.format.ToString(), false);
-            }
-            else if (texture is Cubemap cm)
-            {
-                bool isCompressed = cm.format != TextureFormat.RGBA32 &&
-                                   cm.format != TextureFormat.RGB24;
-                return (cm.format.ToString(), isCompressed);
-            }
-
-            return ("Unknown", false);
-        }
-
-        /// <summary>
-        /// Check if a texture has Quest/Android compression override.
-        /// </summary>
-        public static bool HasQuestCompression(Texture texture)
-        {
-            string path = AssetDatabase.GetAssetPath(texture);
-            if (string.IsNullOrEmpty(path)) return false;
-
-            TextureImporter importer = AssetImporter.GetAtPath(path) as TextureImporter;
-            if (importer == null) return false;
-
-            TextureImporterPlatformSettings androidSettings = importer.GetPlatformTextureSettings("Android");
-            if (!androidSettings.overridden) return false;
-
-            return androidSettings.format != TextureImporterFormat.RGBA32 &&
-                   androidSettings.format != TextureImporterFormat.RGB24;
-        }
-
-        private static long CalculateSizeWithMipmaps(Texture texture, float bpp)
-        {
-            int width = texture.width;
-            int height = texture.height;
             long bytes = 0;
-
-            for (int mip = 0; mip < texture.mipmapCount; mip++)
+            for (int mip = 0; mip < Math.Max(1, mips); mip++)
             {
-                int mipWidth = Mathf.Max(1, width >> mip);
-                int mipHeight = Mathf.Max(1, height >> mip);
-                bytes += (long)Mathf.CeilToInt(mipWidth * mipHeight * bpp / 8f);
+                bytes += Plane(width, height, format) * layers;
+                width = Math.Max(1, width / 2);
+                height = Math.Max(1, height / 2);
+                if (volume) layers = Math.Max(1, layers / 2);
             }
-
             return bytes;
         }
 
-        private static long CalculateRenderTextureSize(RenderTexture rt, float bpp)
+        private static long Plane(int width, int height, GraphicsFormat format)
         {
-            long baseSize = (long)(rt.width * rt.height * bpp / 8f);
-
-            if (rt.useMipMap)
+            if (format == GraphicsFormat.None) return 0;
+            int blockWidth = Math.Max(1, (int)GraphicsFormatUtility.GetBlockWidth(format));
+            int blockHeight = Math.Max(1, (int)GraphicsFormatUtility.GetBlockHeight(format));
+            long columns = (width + blockWidth - 1) / blockWidth;
+            long rows = (height + blockHeight - 1) / blockHeight;
+            if (format.ToString().IndexOf("PVRTC", StringComparison.OrdinalIgnoreCase) >= 0)
             {
-                double mipmapMultiplier = 1;
-                for (int i = 1; i < rt.mipmapCount; i++)
-                    mipmapMultiplier += System.Math.Pow(0.25, i);
-                baseSize = (long)(baseSize * mipmapMultiplier);
+                columns = Math.Max(2, columns);
+                rows = Math.Max(2, rows);
             }
-
-            return baseSize;
+            return columns * rows * GraphicsFormatUtility.GetBlockSize(format);
         }
 
-        /// <summary>
-        /// Format bytes to human-readable string (MiB).
-        /// </summary>
+        public static (string format, bool isCompressed) GetTextureFormatInfo(Texture texture)
+        {
+            if (texture == null) return ("Unknown", false);
+            string name = texture is Texture2D image ? image.format.ToString()
+                : texture is Cubemap cube ? cube.format.ToString() : texture.graphicsFormat.ToString();
+            return (name, GraphicsFormatUtility.IsCompressedFormat(texture.graphicsFormat));
+        }
+
+        public static bool HasQuestCompression(Texture texture)
+        {
+            if (texture == null) return false;
+            var importer = AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(texture)) as TextureImporter;
+            if (importer == null) return false;
+            var android = importer.GetPlatformTextureSettings("Android");
+            if (!android.overridden) return false;
+            if (android.format == TextureImporterFormat.Automatic)
+                return android.textureCompression != TextureImporterCompression.Uncompressed;
+            string format = android.format.ToString();
+            return format.StartsWith("ASTC", StringComparison.Ordinal) || format.StartsWith("ETC", StringComparison.Ordinal)
+                || format.StartsWith("EAC", StringComparison.Ordinal);
+        }
+
         public static string FormatSize(long bytes)
         {
             if (bytes < 1024) return bytes + " B";
@@ -233,55 +93,19 @@ namespace StrangeToolkit
             return (bytes / 1073741824f).ToString("F2") + " GiB";
         }
 
-        /// <summary>
-        /// Check if a format string represents a Quest/Android-optimized compressed format.
-        /// ASTC and ETC2 are Quest-compatible compressed formats.
-        /// </summary>
-        public static bool IsQuestCompressedFormat(string formatName)
+        public static bool IsQuestCompressedFormat(string name)
         {
-            if (string.IsNullOrEmpty(formatName)) return false;
-
-            string upper = formatName.ToUpper();
-
-            // Quest-optimized compressed formats (ASTC, ETC2)
-            if (upper.Contains("ASTC")) return true;
-            if (upper.Contains("ETC2")) return true;
-            if (upper.Contains("ETC_")) return true;
-            if (upper.Contains("EAC")) return true;
-
-            return false;
+            return IsCompressedFormat(name) && (name.IndexOf("ASTC", StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("ETC", StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("EAC", StringComparison.OrdinalIgnoreCase) >= 0);
         }
 
-        /// <summary>
-        /// Check if a format string represents any compressed format (PC or Quest).
-        /// </summary>
-        public static bool IsCompressedFormat(string formatName)
+        public static bool IsCompressedFormat(string name)
         {
-            if (string.IsNullOrEmpty(formatName)) return false;
-
-            string upper = formatName.ToUpper();
-
-            // Uncompressed formats
-            if (upper == "RGBA32") return false;
-            if (upper == "ARGB32") return false;
-            if (upper == "RGB24") return false;
-            if (upper == "BGRA32") return false;
-            if (upper == "R8") return false;
-            if (upper == "R16") return false;
-            if (upper == "RG16") return false;
-            if (upper == "RG32") return false;
-            if (upper == "RGB48") return false;
-            if (upper == "RGBA64") return false;
-
-            // HDR/Float formats (not compressed but special)
-            if (upper.Contains("HALF")) return false;
-            if (upper.Contains("FLOAT")) return false;
-
-            // Unknown format
-            if (upper == "UNKNOWN") return false;
-
-            // Everything else is likely compressed (DXT, BC, ASTC, ETC, PVRTC, etc.)
-            return true;
+            if (Enum.TryParse(name, true, out TextureFormat textureFormat) && Enum.IsDefined(typeof(TextureFormat), textureFormat))
+                return GraphicsFormatUtility.IsCompressedFormat(GraphicsFormatUtility.GetGraphicsFormat(textureFormat, false));
+            return Enum.TryParse(name, true, out GraphicsFormat graphicsFormat) && Enum.IsDefined(typeof(GraphicsFormat), graphicsFormat)
+                && GraphicsFormatUtility.IsCompressedFormat(graphicsFormat);
         }
     }
 }

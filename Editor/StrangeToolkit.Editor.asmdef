@@ -8,7 +8,8 @@
         "VRC.Udon",
         "VRC.SDK3",
         "AVProVideo.Runtime",
-        "AVProVideo.Editor"
+        "AVProVideo.Editor",
+        "StrangeToolkit.Editor.Shared"
     ],
     "includePlatforms": [
         "Editor"

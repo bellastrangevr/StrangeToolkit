@@ -48,7 +48,7 @@ namespace StrangeToolkit
             foreach (var renderer in renderers)
             {
                 // Ignore objects that are dynamic
-                if (IsObjectDynamic(renderer.gameObject))
+                if (IsObjectDynamic(renderer.gameObject) && !_instancingAnalysis.markedForInstancing.Contains(renderer.gameObject) && !_persistentMarkedObjects.Contains(renderer.gameObject))
                     continue;
                 
                 var filter = renderer.GetComponent<MeshFilter>();
@@ -229,6 +229,17 @@ namespace StrangeToolkit
             {
                 if (obj != null)
                     _instancingAnalysis.markedForInstancing.Add(obj);
+            }
+
+            foreach (var candidate in _instancingAnalysis.readyGroups.Concat(_instancingAnalysis.staticGroups)
+                .Concat(_instancingAnalysis.consolidationGroups.SelectMany(group => group.instanceGroups)).SelectMany(group => group.candidates))
+            {
+                if (_staticBeforeInstancing.TryGetValue(candidate.gameObject, out var originalFlags))
+                {
+                    candidate.originalStaticFlags = originalFlags;
+                    candidate.hadStaticFlags = true;
+                    candidate.wasStatic = originalFlags != 0;
+                }
             }
 
             foreach (var group in _instancingAnalysis.readyGroups)
